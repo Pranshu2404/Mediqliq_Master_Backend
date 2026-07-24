@@ -1,0 +1,14 @@
+const router = require('express').Router();
+const controller = require('../controllers/abdmInternal.controller');
+const { verifyMasterInbound } = require('../middlewares/internalAbdmAuth');
+router.use(verifyMasterInbound);
+router.get('/health', controller.health);
+router.get('/facility-status', controller.facilityStatus);
+router.post('/proxy/abha', controller.proxyAbha);
+router.post('/m1/proxy', controller.proxyAbha);
+router.post('/hip/action', controller.hipAction);
+router.post('/m2/action', controller.hipAction);
+router.post('/hiu/action', controller.hiuAction);
+router.post('/m3/action', controller.hiuAction);
+router.post('/m3/data-relay-token', controller.createDataRelayToken);
+module.exports = router;

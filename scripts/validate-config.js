@@ -1,0 +1,15 @@
+require('dotenv').config();
+const crypto = require('crypto');
+const config = require('../config/abdm.config');
+const errors=[]; const warnings=[];
+if (process.env.APP_ROLE && process.env.APP_ROLE !== 'ABDM_MASTER') errors.push('APP_ROLE must be ABDM_MASTER');
+for (const key of ['MONGO_URI','JWT_SECRET','ABDM_CLIENT_ID','ABDM_CLIENT_SECRET','ABDM_BRIDGE_ID','ABDM_MASTER_ENCRYPTION_KEY']) if (!process.env[key]) errors.push(`${key} is required`);
+if ((process.env.JWT_SECRET||'').length < 32) errors.push('JWT_SECRET must contain at least 32 characters');
+if ((process.env.ABDM_MASTER_ENCRYPTION_KEY||'').length < 32) errors.push('ABDM_MASTER_ENCRYPTION_KEY must contain at least 32 characters');
+if (config.publicBaseUrl && !/^https:\/\//.test(config.publicBaseUrl)) errors.push('ABDM_PUBLIC_BASE_URL must use HTTPS');
+if (/\/api\/v3\/?$/.test(config.publicBaseUrl)) errors.push('ABDM_PUBLIC_BASE_URL must be the origin/base domain, not end with /api/v3');
+if (!config.verifyCallbackJwt && config.callbackAllowedIps.length===0) warnings.push('Callback JWT verification and IP allow-list are both disabled');
+if (!config.callbackExpectedIssuer) warnings.push('ABDM_CALLBACK_EXPECTED_ISSUER is not configured');
+if (!config.callbackExpectedAudience) warnings.push('ABDM_CALLBACK_EXPECTED_AUDIENCE is not configured; confirm the sandbox token contract before setting it');
+console.log(JSON.stringify({ valid:errors.length===0, role:config.appRole, environment:config.environment, features:{m1:config.featureM1,m2:config.featureM2,m3:config.featureM3,subscriptions:config.featureSubscriptions}, errors,warnings },null,2));
+if (errors.length) process.exit(1);
