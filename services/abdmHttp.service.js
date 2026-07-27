@@ -86,11 +86,38 @@ async function getBridgeByServiceId(serviceId) {
   return hiecmRequest(`/gateway/v3/bridge-service/serviceId/${encodeURIComponent(serviceId)}`, { method: 'GET' });
 }
 
+
+async function registerBridgeServices(body) {
+  const registrationToken =
+    abdmConfig.facilityRegistrationToken || (await getGatewayToken());
+  const url = new URL(abdmConfig.facilityRegistrationUrl);
+  const allowedHosts = new Set(abdmConfig.facilityRegistrationAllowedHosts || []);
+  if (url.protocol !== 'https:' || !allowedHosts.has(url.hostname)) {
+    throw new Error(
+      `ABDM_FACILITY_REGISTRATION_URL must use HTTPS and an approved host: ${Array.from(allowedHosts).join(', ')}`
+    );
+  }
+  const response = await fetchFn(url.toString(), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${registrationToken}`
+    },
+    body: JSON.stringify(body),
+    redirect: 'error'
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw makeError('ABDM bridge-service registration failed', response, data);
+  return data;
+}
+
 module.exports = {
   authorizedRequest,
   abhaRequest,
   hiecmRequest,
   updateBridgeUrl,
   getBridgeServices,
-  getBridgeByServiceId
+  getBridgeByServiceId,
+  registerBridgeServices
 };

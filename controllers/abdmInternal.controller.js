@@ -13,20 +13,36 @@ const ABHA_ALLOWLIST = new Set([
   'GET /v3/profile/public/certificate',
   'POST /v3/enrollment/request/otp',
   'POST /v3/enrollment/enrol/byAadhaar',
+  'POST /v3/enrollment/enrol/byDocument',
+  'POST /v3/enrollment/enrol/auth/init',
+  'POST /v3/enrollment/enrol/capturePID',
   'POST /v3/enrollment/auth/byAbdm',
+  'GET /v3/enrollment/enrol/suggestion',
+  'POST /v3/enrollment/enrol/abha-address',
   'POST /v3/profile/account/abha/search',
+  'POST /v3/profile/login/search',
   'POST /v3/profile/login/request/otp',
+  'POST /v3/login/request/otp',
   'POST /v3/profile/login/verify',
+  'POST /v3/profile/login/verify/user',
+  'GET /v3/profile/account',
+  'PATCH /v3/profile/account',
   'GET /v3/profile/account/qrCode',
   'GET /v3/profile/account/abha-card',
-  'POST /v3/profile/account/abha-address',
-  'POST /v3/profile/account/abha-address/suggestion',
-  'POST /v3/profile/account/abha-address/validate',
+  'GET /v3/profile/account/request/token',
+  'GET /v3/profile/account/request/logout',
+  'POST /v3/profile/account/request/emailVerificationLink',
   'POST /v3/profile/account/verify',
   'POST /v3/profile/account/request/otp',
   'POST /v3/profile/account/update',
   'POST /v3/profile/account/mobile/update',
-  'POST /v3/profile/account/email/update'
+  'POST /v3/profile/account/email/update',
+  'POST /v3/phr/web/login/abha/search',
+  'POST /v3/phr/web/login/abha/request/otp',
+  'POST /v3/phr/web/login/abha/verify',
+  'GET /v3/phr/web/login/profile/abha-profile',
+  'GET /v3/phr/web/login/profile/abha/phr-card',
+  'GET /v3/phr/web/login/profile/abha/qr-code'
 ]);
 
 function facilityIdentity(req, role = 'hip') {
@@ -112,8 +128,18 @@ exports.proxyAbha = async (req, res) => {
     }
 
     const safeHeaders = {};
-    for (const name of ['X-token', 'x-token', 'X-AUTH-TOKEN', 'x-auth-token']) {
-      if (headers[name]) safeHeaders[name] = headers[name];
+    const allowedHeaders = new Set([
+      'x-token',
+      'x-auth-token',
+      'r-token',
+      't-token',
+      'transaction_id',
+      'benefit-name'
+    ]);
+    for (const [name, value] of Object.entries(headers || {})) {
+      if (allowedHeaders.has(String(name).toLowerCase()) && value) {
+        safeHeaders[name] = String(value);
+      }
     }
 
     const data = await abhaRequest(path, {
@@ -192,6 +218,14 @@ exports.hipAction = async (req, res) => {
       ACK_PROFILE_SHARE: {
         flow: 'PROFILE_SHARE',
         execute: () => hip.acknowledgeProfileShare(facilityId, body, requestId)
+      },
+      SEND_LINK_SMS: {
+        flow: 'HIP_LINK_SMS',
+        execute: () => hip.notifyPatientLinkSms(facilityId, body, requestId)
+      },
+      RESPOND_RUNNING_TOKEN_STATUS: {
+        flow: 'RUNNING_TOKEN_STATUS',
+        execute: () => hip.respondRunningTokenStatus(facilityId, body, requestId)
       }
     };
 
@@ -241,7 +275,7 @@ exports.hiuAction = async (req, res) => {
     }
 
     const hiuId = facilityIdentity(req, 'hiu');
-    const { action, body } = req.body || {};
+    const { action, body, authToken, resourceId, query, lockerId } = req.body || {};
     const requestId = crypto.randomUUID();
 
     const actions = {
@@ -269,6 +303,14 @@ exports.hiuAction = async (req, res) => {
         flow: 'M3_HEALTH_INFORMATION_RECEIVE',
         execute: () => hiu.notifyHealthInformation(hiuId, body, requestId)
       },
+      REQUEST_RUNNING_TOKEN_STATUS: {
+        flow: 'RUNNING_TOKEN_STATUS',
+        execute: () => hiu.requestRunningTokenStatus(hiuId, body, requestId, authToken)
+      },
+      LIST_HEALTH_LOCKERS: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.listHealthLockers(hiuId, query, requestId)
+      },
       INIT_SUBSCRIPTION: {
         flow: 'M3_SUBSCRIPTION',
         execute: () => hiu.initiateSubscription(hiuId, body, requestId)
@@ -279,16 +321,86 @@ exports.hiuAction = async (req, res) => {
       },
       ACK_SUBSCRIPTION_CARE_CONTEXT: {
         flow: 'M3_SUBSCRIPTION',
-        execute: () =>
-          hiu.acknowledgeCareContextNotification(hiuId, body, requestId)
+        execute: () => hiu.acknowledgeCareContextNotification(hiuId, body, requestId)
+      },
+      APPROVE_SUBSCRIPTION: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.approveSubscription(hiuId, resourceId, body, requestId, authToken)
+      },
+      DENY_SUBSCRIPTION: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.denySubscription(hiuId, resourceId, body, requestId, authToken)
+      },
+      LIST_SUBSCRIPTION_REQUESTS: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.listSubscriptionRequests(hiuId, query, requestId, authToken)
+      },
+      GET_SUBSCRIPTION_REQUEST: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.getSubscriptionByRequestId(hiuId, resourceId, requestId, authToken)
+      },
+      GET_SUBSCRIPTION: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.getSubscription(hiuId, resourceId, requestId, authToken)
+      },
+      EDIT_SUBSCRIPTION: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.editSubscription(hiuId, resourceId, body, requestId, authToken)
+      },
+      DISABLE_SUBSCRIPTION: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.disableSubscription(hiuId, resourceId, requestId, authToken)
+      },
+      ENABLE_SUBSCRIPTION: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.enableSubscription(hiuId, resourceId, requestId, authToken)
+      },
+      PATIENT_SUBSCRIPTION_REQUESTS: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.patientRequests(hiuId, query, requestId, authToken)
+      },
+      SETUP_HEALTH_LOCKER: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.setupLocker(hiuId, body, requestId, authToken)
+      },
+      LIST_PATIENT_LOCKERS: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.patientLockers(hiuId, query, requestId, authToken)
+      },
+      GET_PATIENT_LOCKER: {
+        flow: 'M3_SUBSCRIPTION',
+        execute: () => hiu.patientLocker(hiuId, lockerId || resourceId, requestId, authToken)
       }
     };
 
-    if (
-      String(action).includes('SUBSCRIPTION') &&
-      !config.featureSubscriptions
-    ) {
+    const subscriptionActions = new Set([
+      'LIST_HEALTH_LOCKERS', 'INIT_SUBSCRIPTION', 'ACK_SUBSCRIPTION', 'ACK_SUBSCRIPTION_CARE_CONTEXT',
+      'APPROVE_SUBSCRIPTION', 'DENY_SUBSCRIPTION', 'LIST_SUBSCRIPTION_REQUESTS',
+      'GET_SUBSCRIPTION_REQUEST', 'GET_SUBSCRIPTION', 'EDIT_SUBSCRIPTION',
+      'DISABLE_SUBSCRIPTION', 'ENABLE_SUBSCRIPTION', 'PATIENT_SUBSCRIPTION_REQUESTS',
+      'SETUP_HEALTH_LOCKER', 'LIST_PATIENT_LOCKERS', 'GET_PATIENT_LOCKER'
+    ]);
+    if (subscriptionActions.has(action) && !config.featureSubscriptions) {
       return res.status(409).json({ error: 'Subscriptions are disabled' });
+    }
+
+    const patientAuthenticatedActions = new Set([
+      'REQUEST_RUNNING_TOKEN_STATUS', 'APPROVE_SUBSCRIPTION', 'DENY_SUBSCRIPTION',
+      'LIST_SUBSCRIPTION_REQUESTS', 'GET_SUBSCRIPTION_REQUEST', 'GET_SUBSCRIPTION',
+      'EDIT_SUBSCRIPTION', 'DISABLE_SUBSCRIPTION', 'ENABLE_SUBSCRIPTION',
+      'PATIENT_SUBSCRIPTION_REQUESTS', 'SETUP_HEALTH_LOCKER',
+      'LIST_PATIENT_LOCKERS', 'GET_PATIENT_LOCKER'
+    ]);
+    if (patientAuthenticatedActions.has(action) && !authToken) {
+      return res.status(400).json({ error: 'A server-side ABDM patient authentication token is required' });
+    }
+    const resourceActions = new Set([
+      'APPROVE_SUBSCRIPTION', 'DENY_SUBSCRIPTION', 'GET_SUBSCRIPTION_REQUEST',
+      'GET_SUBSCRIPTION', 'EDIT_SUBSCRIPTION', 'DISABLE_SUBSCRIPTION',
+      'ENABLE_SUBSCRIPTION', 'GET_PATIENT_LOCKER'
+    ]);
+    if (resourceActions.has(action) && !(resourceId || lockerId)) {
+      return res.status(400).json({ error: 'resourceId is required' });
     }
 
     const selected = actions[action];
@@ -311,7 +423,7 @@ exports.hiuAction = async (req, res) => {
     );
 
     if (action === 'INIT_CONSENT_REQUEST') {
-      const consentRequestId = body?.request?.id || requestId;
+      const consentRequestId = result.data?.consentRequestId || requestId;
       await AbdmConsent.findOneAndUpdate(
         { facilityId: hiuId, consentRequestId },
         {
@@ -320,10 +432,10 @@ exports.hiuAction = async (req, res) => {
           consentId: body?.consentId || `pending:${requestId}`,
           role: 'HIU',
           status: 'REQUESTED',
-          abhaAddress: body?.patient?.id,
-          hiTypes: body?.hiTypes || body?.permission?.hiTypes,
-          purpose: body?.purpose,
-          permission: body?.permission
+          abhaAddress: body?.consent?.patient?.id,
+          hiTypes: body?.consent?.hiTypes || body?.consent?.permission?.hiTypes,
+          purpose: body?.consent?.purpose,
+          permission: body?.consent?.permission
         },
         { upsert: true, new: true }
       );

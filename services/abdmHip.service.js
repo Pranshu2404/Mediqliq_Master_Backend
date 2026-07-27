@@ -110,6 +110,31 @@ async function acknowledgeProfileShare(facilityId, body, requestId = crypto.rand
   return { requestId, data };
 }
 
+
+async function notifyPatientLinkSms(facilityId, body, requestId = crypto.randomUUID()) {
+  const data = await hiecmRequest('/hip/v3/link/patient/links/sms/notify2', {
+    method: 'POST',
+    body: {
+      requestId: body?.requestId || requestId,
+      timestamp: body?.timestamp || new Date().toISOString(),
+      notification: body?.notification
+    },
+    headers: hipHeaders(facilityId),
+    requestId
+  });
+  return { requestId, data };
+}
+
+async function respondRunningTokenStatus(facilityId, body, requestId = crypto.randomUUID()) {
+  const data = await hiecmRequest('/patient-share/v3/running-token/on-status', {
+    method: 'POST',
+    body,
+    headers: hipHeaders(facilityId),
+    requestId
+  });
+  return { requestId, data };
+}
+
 module.exports = {
   generateLinkToken,
   linkCareContext,
@@ -120,5 +145,7 @@ module.exports = {
   acknowledgeConsent,
   acknowledgeHealthInformationRequest,
   notifyHealthInformation,
-  acknowledgeProfileShare
+  acknowledgeProfileShare,
+  notifyPatientLinkSms,
+  respondRunningTokenStatus
 };

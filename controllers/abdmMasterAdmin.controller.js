@@ -8,7 +8,7 @@ const { encryptSecret } = require('../utils/secretVault');
 const { readiness } = require('../utils/abdmOnboarding');
 const abdmConfig = require('../config/abdm.config');
 const { getGatewayToken } = require('../services/abdmAuth.service');
-const { updateBridgeUrl, getBridgeServices, getBridgeByServiceId } = require('../services/abdmHttp.service');
+const { updateBridgeUrl, getBridgeServices, getBridgeByServiceId, registerBridgeServices } = require('../services/abdmHttp.service');
 const { forwardToHospital } = require('../services/abdmFacilityRouter.service');
 
 function actor(req) {
@@ -319,6 +319,54 @@ exports.verifyHfrFacility = async (req, res) => {
     return res.json({ success: true, facility: cleanFacility(facility) });
   } catch (error) {
     return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+exports.registerFacilityServices = async (req, res) => {
+  try {
+    const facility = await findFacility(req.params.facilityId);
+    if (!facility) return res.status(404).json({ error: 'Facility not found' });
+    const services = [];
+    if (facility.services?.hip) {
+      if (!facility.abdm?.hipId) return res.status(409).json({ error: 'HIP service ID is not configured' });
+      services.push({
+        bridgeId: facility.abdm.bridgeId || abdmConfig.bridgeId,
+        hipName: facility.abdm.hipName || facility.hfr?.facilityName,
+        type: 'HIP',
+        active: true
+      });
+    }
+    if (facility.services?.hiu) {
+      if (!facility.abdm?.hiuId) return res.status(409).json({ error: 'HIU service ID is not configured' });
+      services.push({
+        bridgeId: facility.abdm.bridgeId || abdmConfig.bridgeId,
+        hipName: facility.abdm.hiuName || facility.hfr?.facilityName,
+        type: 'HIU',
+        active: true
+      });
+    }
+    if (!services.length) return res.status(409).json({ error: 'No HIP/HIU service is enabled' });
+    const payload = {
+      facilityId: facility.hfr?.facilityId,
+      facilityName: facility.hfr?.facilityName,
+      HRP: services
+    };
+    const data = await registerBridgeServices(payload);
+    facility.metadata = {
+      ...(facility.metadata || {}),
+      serviceRegistration: {
+        registeredAt: new Date(),
+        registeredBy: actor(req),
+        payloadHash: crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
+        response: data
+      }
+    };
+    facility.abdm.linkageStatus = 'PENDING';
+    facility.onboardingStatus = 'SOFTWARE_LINKAGE_PENDING';
+    await facility.save();
+    return res.status(202).json({ success: true, data, facility: cleanFacility(facility) });
+  } catch (error) {
+    return res.status(error.statusCode || 502).json({ success: false, error: error.message, details: error.details });
   }
 };
 

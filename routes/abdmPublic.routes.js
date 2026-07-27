@@ -14,6 +14,8 @@ if (config.featureM2) {
   router.post('/links/context/onnotify', controller.careContextUpdateCallback);
   router.post('/patients/sms/on-notify', controller.smsNotifyCallback);
   router.post('/patients/sms/onnotify', controller.smsNotifyCallback);
+  router.post('/hip/patient-share/running-token/status', controller.runningTokenStatus);
+  router.post('/hip/running-token/status', controller.runningTokenStatus);
   router.post('/hip/patient/care-context/discover', controller.userDiscovery);
   router.post('/hip/patient/carecontext/discover', controller.userDiscovery);
   router.post('/hip/link/care-context/init', controller.userLinkInit);

@@ -58,7 +58,16 @@ const config = {
   featureM2: boolEnv('ABDM_ENABLE_M2', true),
   featureM3: boolEnv('ABDM_ENABLE_M3', true),
   featureSubscriptions: boolEnv('ABDM_ENABLE_SUBSCRIPTIONS', false),
-  fhirProfileBase: process.env.ABDM_FHIR_PROFILE_BASE || 'https://nrces.in/ndhm/fhir/r4/StructureDefinition'
+  fhirProfileBase: process.env.ABDM_FHIR_PROFILE_BASE || 'https://nrces.in/ndhm/fhir/r4/StructureDefinition',
+  facilityRegistrationUrl: process.env.ABDM_FACILITY_REGISTRATION_URL || (isProduction
+    ? 'https://facility.abdm.gov.in/v1/bridges/MutipleHRPAddUpdateServices'
+    : 'https://apihspsbx.abdm.gov.in/v4/int/v1/bridges/MutipleHRPAddUpdateServices'),
+  facilityRegistrationToken: process.env.ABDM_FACILITY_REGISTRATION_TOKEN,
+  facilityRegistrationAllowedHosts: csvEnv('ABDM_FACILITY_REGISTRATION_ALLOWED_HOSTS').length
+    ? csvEnv('ABDM_FACILITY_REGISTRATION_ALLOWED_HOSTS')
+    : (isProduction
+      ? ['apihsp.abdm.gov.in', 'facility.abdm.gov.in']
+      : ['apihspsbx.abdm.gov.in', 'facilitysbx.abdm.gov.in'])
 };
 
 function assertMasterCredentials() {

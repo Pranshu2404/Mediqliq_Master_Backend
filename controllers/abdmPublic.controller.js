@@ -19,7 +19,8 @@ const FLOW_BY_EVENT = Object.freeze({
   USER_LINK_INIT: 'USER_LINK_INIT',
   USER_LINK_CONFIRM: 'USER_LINK_CONFIRM',
   CONSENT_NOTIFY: 'CONSENT_NOTIFY',
-  HEALTH_INFORMATION_REQUEST: 'HEALTH_INFORMATION_REQUEST'
+  HEALTH_INFORMATION_REQUEST: 'HEALTH_INFORMATION_REQUEST',
+  RUNNING_TOKEN_STATUS: 'RUNNING_TOKEN_STATUS'
 });
 
 function sha256(value) {
@@ -61,8 +62,7 @@ function safeHeaders(headers = {}) {
   return {
     'x-hip-id': headers['x-hip-id'],
     'x-hiu-id': headers['x-hiu-id'],
-    'x-cm-id': headers['x-cm-id'],
-    'x-auth-token': headers['x-auth-token']
+    'x-cm-id': headers['x-cm-id']
   };
 }
 
@@ -267,6 +267,7 @@ exports.linkTokenCallback = callback('HIP_LINK_TOKEN_CALLBACK');
 exports.linkCareContextCallback = callback('HIP_CARE_CONTEXT_LINK_CALLBACK');
 exports.careContextUpdateCallback = callback('CARE_CONTEXT_UPDATE_CALLBACK');
 exports.smsNotifyCallback = callback('SMS_NOTIFY_CALLBACK');
+exports.runningTokenStatus = callback('RUNNING_TOKEN_STATUS');
 exports.userDiscovery = callback('USER_DISCOVERY');
 exports.userLinkInit = callback('USER_LINK_INIT');
 exports.userLinkConfirm = callback('USER_LINK_CONFIRM');
