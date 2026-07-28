@@ -8,6 +8,7 @@ const AbdmTransaction = require('../models/AbdmTransaction');
 const AbdmConsent = require('../models/AbdmConsent');
 const AbdmHiuRequest = require('../models/AbdmHiuRequest');
 const AbdmDataRelayToken = require('../models/AbdmDataRelayToken');
+const { sanitizeDependencyReport } = require('../utils/abdmDependencyStatus');
 
 const ABHA_ALLOWLIST = new Set([
   'GET /v3/profile/public/certificate',
@@ -75,6 +76,7 @@ async function createTransaction(
   });
 }
 
+
 exports.health = (req, res) => {
   return res.json({
     success: true,
@@ -98,9 +100,33 @@ exports.facilityStatus = (req, res) => {
       connector: {
         status: req.abdmFacility.connector?.status
       },
+      dependencies: req.abdmFacility.dependencies || null,
       readiness: readiness(req.abdmFacility)
     }
   });
+};
+
+
+exports.dependencyStatus = async (req, res) => {
+  try {
+    const report = sanitizeDependencyReport(req.body || {});
+    req.abdmFacility.dependencies = {
+      ...report,
+      reportRequestId: req.abdmInternalRequestId
+    };
+    await req.abdmFacility.save();
+    return res.json({
+      success: true,
+      acceptedAt: report.receivedAt,
+      productionTransferReady: report.productionTransferReady,
+      readiness: readiness(req.abdmFacility)
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      error: error.message
+    });
+  }
 };
 
 exports.proxyAbha = async (req, res) => {

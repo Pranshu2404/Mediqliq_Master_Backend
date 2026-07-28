@@ -4,6 +4,7 @@ const { verifyMasterInbound } = require('../middlewares/internalAbdmAuth');
 router.use(verifyMasterInbound);
 router.get('/health', controller.health);
 router.get('/facility-status', controller.facilityStatus);
+router.post('/dependency-status', controller.dependencyStatus);
 router.post('/proxy/abha', controller.proxyAbha);
 router.post('/m1/proxy', controller.proxyAbha);
 router.post('/hip/action', controller.hipAction);

@@ -54,7 +54,10 @@ async function verifyMasterInbound(req, res, next) {
 
     const facility = await findFacilityByHipId(h.facilityId);
     const connectorStatus = facility?.connector?.status;
-    const pendingAllowedPath = req.originalUrl.startsWith('/internal/abdm/facility-status') || req.originalUrl.startsWith('/internal/abdm/health');
+    const pendingAllowedPath =
+      req.originalUrl.startsWith('/internal/abdm/facility-status') ||
+      req.originalUrl.startsWith('/internal/abdm/health') ||
+      req.originalUrl.startsWith('/internal/abdm/dependency-status');
     const allowedStatus = connectorStatus === 'ACTIVE' || (connectorStatus === 'PENDING' && pendingAllowedPath);
     if (!facility || !allowedStatus || facility.connector?.keyId !== h.keyId) {
       return res.status(401).json({ error: 'Unknown, inactive, or not-yet-activated facility connector' });

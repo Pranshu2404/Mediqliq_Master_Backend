@@ -20,6 +20,7 @@ const ONBOARDING_STATES = [
 const TEST_STATUSES = ['NOT_TESTED', 'TESTING', 'PASSED', 'FAILED'];
 
 function readiness(facility) {
+  const config = require('../config/abdm.config');
   const hfrStatus = facility?.hfr?.status || facility?.hfrStatus;
   const linkageStatus = facility?.abdm?.linkageStatus || facility?.softwareLinkageStatus;
   const hipId = facility?.abdm?.hipId || facility?.facilityId;
@@ -38,10 +39,30 @@ function readiness(facility) {
     dataExchangePassed: dataStatus === 'PASSED'
   };
 
+  const dependencyReportedAt = facility?.dependencies?.reportedAt
+    ? new Date(facility.dependencies.reportedAt).getTime()
+    : 0;
+  const dependencyReportFresh = Boolean(
+    dependencyReportedAt &&
+      Date.now() - dependencyReportedAt <= config.dependencyStatusTtlSeconds * 1000
+  );
+  const productionChecks = {
+    dependencyReportFresh,
+    productionTransferReady:
+      dependencyReportFresh && facility?.dependencies?.productionTransferReady === true
+  };
+  const targetEnvironment = facility?.abdm?.environment || facility?.environment || config.environment;
+  const requiredChecks = targetEnvironment === 'production'
+    ? { ...checks, ...productionChecks }
+    : checks;
+
   return {
     checks,
-    readyForLive: Object.values(checks).every(Boolean),
-    missing: Object.entries(checks)
+    productionChecks,
+    dependencyReportedAt: dependencyReportedAt ? new Date(dependencyReportedAt) : null,
+    dependencyStatusTtlSeconds: config.dependencyStatusTtlSeconds,
+    readyForLive: Object.values(requiredChecks).every(Boolean),
+    missing: Object.entries(requiredChecks)
       .filter(([, value]) => !value)
       .map(([key]) => key)
   };

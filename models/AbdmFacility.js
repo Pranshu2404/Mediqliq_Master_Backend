@@ -116,6 +116,20 @@ const abdmFacilitySchema = new mongoose.Schema(
       dataExchange: { type: rolloutTestSchema, default: () => ({}) }
     },
 
+    // Hospital-reported readiness for the private validator, crypto and consent
+    // services. URLs, tokens, patient data and validation payloads are never
+    // accepted into this status document.
+    dependencies: {
+      reportedAt: Date,
+      receivedAt: Date,
+      productionTransferReady: { type: Boolean, default: false },
+      transferReadiness: mongoose.Schema.Types.Mixed,
+      packetReadiness: mongoose.Schema.Types.Mixed,
+      health: mongoose.Schema.Types.Mixed,
+      reportRequestId: String,
+      source: { type: String, default: 'HOSPITAL_BACKEND' }
+    },
+
     goLive: {
       activatedAt: Date,
       activatedBy: verificationActorSchema,

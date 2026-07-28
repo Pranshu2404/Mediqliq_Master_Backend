@@ -66,6 +66,7 @@ const config = {
   featureM2: boolEnv('ABDM_ENABLE_M2', true),
   featureM3: boolEnv('ABDM_ENABLE_M3', true),
   featureSubscriptions: boolEnv('ABDM_ENABLE_SUBSCRIPTIONS', false),
+  dependencyStatusTtlSeconds: Math.max(30, Number(process.env.ABDM_DEPENDENCY_STATUS_TTL_SECONDS || 300)),
   fhirProfileBase: process.env.ABDM_FHIR_PROFILE_BASE || 'https://nrces.in/ndhm/fhir/r4/StructureDefinition',
   facilityRegistrationUrl: process.env.ABDM_FACILITY_REGISTRATION_URL || (isProduction
     ? 'https://facility.abdm.gov.in/v1/bridges/MutipleHRPAddUpdateServices'

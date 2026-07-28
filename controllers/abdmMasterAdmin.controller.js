@@ -6,6 +6,7 @@ const AbdmTransaction = require('../models/AbdmTransaction');
 const AbdmWebhookEvent = require('../models/AbdmWebhookEvent');
 const { encryptSecret } = require('../utils/secretVault');
 const { readiness } = require('../utils/abdmOnboarding');
+const { sanitizeDependencyReport } = require('../utils/abdmDependencyStatus');
 const abdmConfig = require('../config/abdm.config');
 const { getGatewayToken } = require('../services/abdmAuth.service');
 const { updateBridgeUrl, getBridgeServices, getBridgeByServiceId, registerBridgeServices } = require('../services/abdmHttp.service');
@@ -499,6 +500,12 @@ exports.checkFacilityConnector = async (req, res) => {
 
     facility.connector.lastHealthCheckAt = new Date();
     facility.connector.lastHealthCheckResponse = result;
+    if (result.dependencyStatus) {
+      facility.dependencies = {
+        ...sanitizeDependencyReport(result.dependencyStatus),
+        reportRequestId: 'CONNECTOR_HEALTH_CHECK'
+      };
+    }
     facility.connector.lastHealthCheckStatus = matches ? 'OK' : 'IDENTITY_MISMATCH';
     facility.connector.status = matches ? 'ACTIVE' : 'UNREACHABLE';
     facility.onboardingStatus = matches ? 'CONNECTOR_ACTIVE' : 'CONNECTOR_PENDING';
