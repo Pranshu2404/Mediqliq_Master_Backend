@@ -4,6 +4,14 @@ function stripTrailingSlash(value = '') {
   return String(value || '').replace(/\/+$/, '');
 }
 
+function normalizeHiecmBaseUrl(value, fallback) {
+  return stripTrailingSlash(value || fallback)
+    // Legacy/wrong ordering: /api/v3/hiecm
+    .replace(/\/api\/v3\/hiecm$/i, '/api/hiecm')
+    // Avoid duplicating /v3 when service methods append their versioned path.
+    .replace(/\/api\/hiecm\/v3$/i, '/api/hiecm');
+}
+
 function boolEnv(name, fallback = false) {
   const value = process.env[name];
   if (value === undefined || value === null || value === '') return fallback;
@@ -19,6 +27,10 @@ const isProduction = environment === 'production';
 const defaultHiecmBaseUrl = isProduction
   ? 'https://apis.abdm.gov.in/api/hiecm'
   : 'https://dev.abdm.gov.in/api/hiecm';
+const configuredHiecmBaseUrl = normalizeHiecmBaseUrl(
+  process.env.ABDM_HIECM_BASE_URL,
+  defaultHiecmBaseUrl
+);
 const config = {
   appRole: ROLE, environment, isProduction, isMaster: true, isHospital: false,
   cmId: process.env.ABDM_CM_ID || (isProduction ? 'abdm' : 'sbx'),
@@ -31,15 +43,11 @@ const config = {
   abhaBaseUrl: stripTrailingSlash(process.env.ABDM_ABHA_BASE_URL || (isProduction
     ? 'https://abha.abdm.gov.in/api/abha'
     : 'https://abhasbx.abdm.gov.in/abha/api')),
-  hiecmBaseUrl: stripTrailingSlash(
-    process.env.ABDM_HIECM_BASE_URL || defaultHiecmBaseUrl
-  ),
+  hiecmBaseUrl: configuredHiecmBaseUrl,
   publicBaseUrl: stripTrailingSlash(process.env.ABDM_PUBLIC_BASE_URL || ''),
   openidConfigurationUrl:
     process.env.ABDM_OPENID_CONFIGURATION_URL ||
-    `${stripTrailingSlash(
-      process.env.ABDM_HIECM_BASE_URL || defaultHiecmBaseUrl
-    )}/gateway/v3/.well-known/openid-configuration`,
+    `${configuredHiecmBaseUrl}/gateway/v3/.well-known/openid-configuration`,
   masterAdminKey: process.env.ABDM_MASTER_ADMIN_KEY,
   masterEncryptionKey: process.env.ABDM_MASTER_ENCRYPTION_KEY,
   storeCallbackPayloads: boolEnv('ABDM_STORE_CALLBACK_PAYLOADS', false),
@@ -81,4 +89,12 @@ function assertSecureCallbackConfiguration() {
   }
 }
 
-module.exports = { ...config, assertMasterCredentials, assertSecureCallbackConfiguration, stripTrailingSlash, boolEnv, csvEnv };
+module.exports = {
+  ...config,
+  assertMasterCredentials,
+  assertSecureCallbackConfiguration,
+  stripTrailingSlash,
+  normalizeHiecmBaseUrl,
+  boolEnv,
+  csvEnv
+};

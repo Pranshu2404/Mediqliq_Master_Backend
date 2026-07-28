@@ -8,7 +8,13 @@ function headers(hiuId, extra = {}) {
 
 function request(path, hiuId, { method = 'POST', body, requestId = crypto.randomUUID(), authToken, lockerId } = {}) {
   const extra = {};
-  if (authToken) extra['X-AUTH-TOKEN'] = `Bearer ${String(authToken).replace(/^Bearer\s+/i, '')}`;
+  if (authToken) {
+    // ABDM HIE-CM expects X-AUTH-TOKEN as the raw patient JWT.
+    // The Bearer scheme is used only by the gateway Authorization header.
+    extra['X-AUTH-TOKEN'] = String(authToken)
+      .replace(/^Bearer\s+/i, '')
+      .trim();
+  }
   if (lockerId) extra['X-LOCKER-ID'] = lockerId;
   return hiecmRequest(path, {
     method,

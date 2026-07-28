@@ -61,12 +61,15 @@ async function verifyMasterInbound(req, res, next) {
     }
 
     const secret = decryptSecret(facility.connector.secretEncrypted);
+    const signedBody = ['GET', 'HEAD'].includes(String(req.method).toUpperCase())
+      ? undefined
+      : req.body;
     const expected = signRequest(secret, {
       timestamp: h.timestamp,
       requestId: h.requestId,
       method: req.method,
       path: req.originalUrl,
-      body: req.body
+      body: signedBody
     });
     if (!safeEqual(expected, h.signature)) {
       return res.status(401).json({ error: 'Invalid connector signature' });
@@ -100,12 +103,15 @@ async function verifyHospitalInbound(req, res, next) {
       return res.status(401).json({ error: 'Connector identity does not match this hospital deployment' });
     }
 
+    const signedBody = ['GET', 'HEAD'].includes(String(req.method).toUpperCase())
+      ? undefined
+      : req.body;
     const expected = signRequest(abdmConfig.connectorSecret, {
       timestamp: h.timestamp,
       requestId: h.requestId,
       method: req.method,
       path: req.originalUrl,
-      body: req.body
+      body: signedBody
     });
     if (!safeEqual(expected, h.signature)) {
       return res.status(401).json({ error: 'Invalid connector signature' });
