@@ -16,7 +16,14 @@ function sanitizeDependencyHealth(value = {}) {
   for (const name of ['fhirValidator', 'cryptoAdapter', 'consentValidator']) {
     const item = value?.[name] || {};
     output[name] = {
-      ...booleansOnly(item, ['configured', 'healthy', 'integrityCapable']),
+      ...booleansOnly(item, [
+        'configured',
+        'healthy',
+        'integrityCapable',
+        'productionCapable',
+        'trustReady',
+        'databaseReady'
+      ]),
       ...(Number.isFinite(Number(item.latencyMs))
         ? { latencyMs: Math.max(0, Math.min(60000, Number(item.latencyMs))) }
         : {}),
@@ -24,6 +31,19 @@ function sanitizeDependencyHealth(value = {}) {
       package: boundedString(item.package),
       fhirVersion: boundedString(item.fhirVersion),
       code: boundedString(item.code || item.errorCode),
+      capabilities: booleansOnly(item.capabilities, [
+        'signatureVerification',
+        'integrityVerification',
+        'lifecycleValidation',
+        'scopeValidation',
+        'purposeValidation',
+        'hiTypeValidation',
+        'identityValidation',
+        'frequencyEnforcement',
+        'retentionEnforcement',
+        'durableUsageLedger',
+        'operationBinding'
+      ]),
       checkedAt: item.checkedAt && !Number.isNaN(new Date(item.checkedAt).getTime())
         ? new Date(item.checkedAt)
         : undefined
@@ -53,6 +73,7 @@ function sanitizeDependencyReport(body = {}) {
         'externalFhirValidationRequired',
         'consentValidatorConfigured',
         'consentValidatorHealthy',
+        'consentValidatorProductionCapable',
         'consentValidationRequired',
         'dataPushAllowlistConfigured',
         'privateDataPushAllowed'

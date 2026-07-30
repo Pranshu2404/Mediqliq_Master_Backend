@@ -22,6 +22,7 @@ test('hospital dependency report is reduced to PHI-free readiness metadata', () 
       externalFhirValidationRequired: true,
       consentValidatorConfigured: true,
       consentValidatorHealthy: true,
+      consentValidatorProductionCapable: true,
       consentValidationRequired: true,
       dataPushAllowlistConfigured: true,
       privateDataPushAllowed: false,
@@ -40,7 +41,15 @@ test('hospital dependency report is reduced to PHI-free readiness metadata', () 
     dependencies: {
       fhirValidator: { configured: true, healthy: true, package: 'ndhm.in#6.5.0' },
       cryptoAdapter: { configured: true, healthy: true, privateKey: 'forbidden' },
-      consentValidator: { configured: true, healthy: true, artefact: 'forbidden' }
+      consentValidator: {
+        configured: true,
+        healthy: true,
+        productionCapable: true,
+        trustReady: true,
+        databaseReady: true,
+        capabilities: { signatureVerification: true, frequencyEnforcement: true, patient: 'forbidden' },
+        artefact: 'forbidden'
+      }
     }
   });
 
@@ -49,6 +58,11 @@ test('hospital dependency report is reduced to PHI-free readiness metadata', () 
   assert.equal(report.transferReadiness.cryptoAdapterUrl, undefined);
   assert.equal(report.packetReadiness.bundle, undefined);
   assert.equal(report.health.cryptoAdapter.privateKey, undefined);
+  assert.equal(report.transferReadiness.consentValidatorProductionCapable, true);
+  assert.equal(report.health.consentValidator.productionCapable, true);
+  assert.equal(report.health.consentValidator.capabilities.signatureVerification, true);
+  assert.equal(report.health.consentValidator.capabilities.patient, undefined);
+  assert.equal(report.health.consentValidator.artefact, undefined);
   assert.equal(report.patient, undefined);
 });
 
