@@ -1,0 +1,81 @@
+services:
+  mediqliq-fhir-validator:
+    build:
+      context: ./apps/fhir-validator
+      dockerfile: Dockerfile.mediqliq
+    image: mediqliq-fhir-validator:6.5.0
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MEDIQLIQ_SERVICE_TOKEN: ${ABDM_FHIR_VALIDATOR_TOKEN}
+    expose: ["3500"]
+    # Loopback binding supports a Master API running as a host process without
+    # exposing the validator to the public/LAN network. Containerized Master API
+    # deployments should use the service DNS name on abdm-internal instead.
+    ports: ["127.0.0.1:3500:3500"]
+    networks: [abdm-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  mediqliq-crypto-adapter:
+    build:
+      context: ./apps/crypto-adapter
+      dockerfile: Dockerfile
+    image: mediqliq-abdm-crypto-adapter:1.0.0
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MEDIQLIQ_SERVICE_TOKEN: ${ABDM_CRYPTO_ADAPTER_TOKEN}
+      KEY_HANDLE_SECRET_BASE64: ${ABDM_CRYPTO_KEY_HANDLE_SECRET_BASE64}
+      KEY_HANDLE_VERSION: ${ABDM_CRYPTO_KEY_HANDLE_VERSION:-v1}
+      KEY_TTL_SECONDS: ${ABDM_CRYPTO_KEY_TTL_SECONDS:-1800}
+    expose: ["8090"]
+    ports: ["127.0.0.1:8090:8090"]
+    networks: [abdm-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  mediqliq-consent-validator:
+    build:
+      context: .
+      dockerfile: apps/consent-validator/Dockerfile
+    image: mediqliq-abdm-consent-validator:1.0.0
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      CONSENT_VALIDATOR_ENV: ${ABDM_ENV:-production}
+      CONSENT_VALIDATOR_SERVICE_TOKEN: ${ABDM_CONSENT_VALIDATOR_TOKEN}
+      CONSENT_VALIDATOR_MONGO_URI: ${ABDM_CONSENT_VALIDATOR_MONGO_URI}
+      CONSENT_VALIDATOR_IDENTIFIER_PEPPER: ${ABDM_CONSENT_VALIDATOR_IDENTIFIER_PEPPER}
+      CONSENT_VALIDATOR_JWKS_URL: ${ABDM_CONSENT_VALIDATOR_JWKS_URL:-}
+      CONSENT_VALIDATOR_JWKS_ALLOWED_HOSTS: ${ABDM_CONSENT_VALIDATOR_JWKS_ALLOWED_HOSTS:-}
+      CONSENT_VALIDATOR_PINNED_JWKS_JSON: ${ABDM_CONSENT_VALIDATOR_PINNED_JWKS_JSON:-}
+      CONSENT_VALIDATOR_EXPECTED_ISSUERS: ${ABDM_CONSENT_VALIDATOR_EXPECTED_ISSUERS}
+      CONSENT_VALIDATOR_EXPECTED_AUDIENCES: ${ABDM_CONSENT_VALIDATOR_EXPECTED_AUDIENCES}
+      CONSENT_VALIDATOR_ALLOWED_ALGORITHMS: ${ABDM_CONSENT_VALIDATOR_ALLOWED_ALGORITHMS:-RS256,RS512,ES256}
+      CONSENT_VALIDATOR_REQUIRE_MONGO_TRANSACTIONS: "true"
+      CONSENT_VALIDATOR_ALLOW_UNSIGNED_SANDBOX_ARTEFACTS: "false"
+    expose: ["8180"]
+    ports: ["127.0.0.1:8180:8180"]
+    networks: [abdm-internal]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8180/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+networks:
+  # Shared ABDM compute is private to the Master deployment. Do not publish these
+  # service ports publicly; the Master backend is their authenticated gateway.
+  abdm-internal:
+    name: mediqliq-abdm-internal
+    driver: bridge

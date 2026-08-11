@@ -7,6 +7,7 @@ const AbdmConsent = require('../models/AbdmConsent');
 const abdmConfig = require('../config/abdm.config');
 const AbdmHiuRequest = require('../models/AbdmHiuRequest');
 const AbdmSubscription = require('../models/AbdmSubscription');
+const abdmSharedInfrastructure = require('../services/abdmSharedInfrastructure.service');
 
 function countMap(rows = []) {
   return rows.reduce((result, row) => {
@@ -196,6 +197,26 @@ exports.getWebhookEvent = async (req, res) => {
   }
 };
 
+
+exports.getSharedServicesHealth = async (req, res) => {
+  try {
+    const services = await abdmSharedInfrastructure.sharedPlatformHealth(`master-admin:${req.user?._id || 'unknown'}:${Date.now()}`);
+    return res.json({
+      success: true,
+      architecture: 'MASTER_SHARED',
+      productionTransferReady: services.productionTransferReady === true,
+      services: {
+        fhirValidator: services.fhirValidator,
+        cryptoAdapter: services.cryptoAdapter,
+        consentValidator: services.consentValidator
+      },
+      checkedAt: services.checkedAt || new Date().toISOString()
+    });
+  } catch (error) {
+    req.auditError = { message: error.message };
+    return res.status(error.statusCode || 502).json({ success: false, message: error.message, code: error.code });
+  }
+};
 
 exports.listHiuRequests = async (req, res) => {
   const filter = {};

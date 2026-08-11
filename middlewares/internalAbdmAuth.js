@@ -57,6 +57,7 @@ async function verifyMasterInbound(req, res, next) {
     const pendingAllowedPath =
       req.originalUrl.startsWith('/internal/abdm/facility-status') ||
       req.originalUrl.startsWith('/internal/abdm/health') ||
+      req.originalUrl.startsWith('/internal/abdm/shared/health') ||
       req.originalUrl.startsWith('/internal/abdm/dependency-status');
     const allowedStatus = connectorStatus === 'ACTIVE' || (connectorStatus === 'PENDING' && pendingAllowedPath);
     if (!facility || !allowedStatus || facility.connector?.keyId !== h.keyId) {

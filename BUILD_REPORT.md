@@ -1,37 +1,26 @@
-# Build report
+# MediQliq Central ABDM Shared Services - Build Report
 
-## Included
+This patch centralizes the private FHIR Validator, Crypto Adapter, and Consent Validator under the MediQliq Master backend and migrates the hospital backend to consume them through its authenticated Master connector.
 
-- Dedicated `ABDM_MASTER` Express/MongoDB backend
-- Existing MediQliq super-admin frontend API contract
-- Facility, hospital, license, user and audit management
-- HFR/HIP/HIU identity and connector onboarding
-- Real bridge-service linkage checks; no forced sandbox success
-- Per-facility encrypted connector secrets
-- Canonical HMAC signing and replay protection
-- M1 allow-listed ABHA proxy
-- M2 HIP actions and asynchronous callbacks
-- M3 HIU consent/data-request actions and asynchronous callbacks
-- Expiring encrypted-data relay URLs for direct HIP-to-HIU delivery through the master
-- Consent, transaction, webhook, job, HIU request and subscription metadata
-- Retry/replay operations
-- Callback JWT verification using OpenID discovery, JWKS rotation, issuer and optional audience/required-claim validation
-- Dockerfile, environment template, API documentation and package lock
+## Validation completed
 
-## Validation performed
-
-- Repository-wide `node --check`: passed
-- Static relative import validation: passed
-- Six Node tests: passed
-- Current master frontend route groups: present
-- Hospital clinical routes: not mounted
-- Secret-pattern scan: no supplied credentials found
-- Package-lock consistency check: passed
+- Master backend static shared-service/API tests: **12/12 passed**.
+- Crypto Adapter facade tests: **2/2 passed**.
+- Consent Validator policy/trust tests: **13/13 passed**.
+- Hospital backend central-service migration/contract tests: **6/6 passed**.
+- Changed/new JavaScript files in Master backend and Hospital backend: `node --check` passed.
+- Changed/new MediQliq Master frontend JS/JSX files: TypeScript JSX transpilation passed with no syntax diagnostics.
+- Repository search confirmed that the hospital runtime wrappers no longer use `ABDM_FHIR_VALIDATOR_URL`, `ABDM_CRYPTO_ADAPTER_URL`, or `ABDM_CONSENT_VALIDATOR_URL` directly.
 
 ## Environment limitation
 
-A full `npm ci` download and live MongoDB/ABDM startup could not be completed in the build environment because package downloads were unavailable. Run `npm ci`, `npm run validate`, `npm test`, and a sandbox smoke test in local development or CI before deployment.
+The FHIR validator Gradle wrapper could not download its Gradle distribution from `services.gradle.org` in this execution environment, so a fresh JVM compilation was not completed here. No Kotlin compiler diagnostic was produced; deployment/CI should run the normal Gradle build with network/dependency access before release.
 
-## Scope boundary
+## Release checks still required in deployment/CI
 
-This is the central master/control-plane implementation. Hospital-side patient ownership, OTP rules, care contexts, FHIR generation/validation, consent enforcement, encryption/decryption, imported-record storage and clinical viewing remain hospital-backend responsibilities and are intentionally not duplicated here.
+1. Build the moved FHIR validator container/JVM application.
+2. Build and start all three private Master-side service containers.
+3. Configure Master-side private service tokens/secrets/trust settings.
+4. Run a live hospital connector smoke test through `/internal/abdm/shared/*`.
+5. Verify FHIR validation, Crypto receiver-key/encrypt/decrypt, and Consent validate/reservation commit/release for two different hospital connectors to confirm tenant isolation.
+6. Verify Master Admin `/abdm/shared-services/health` reports all services healthy before enabling production M2/M3 transfer.

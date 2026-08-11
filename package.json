@@ -12,7 +12,9 @@
     "dev": "nodemon server.js",
     "validate": "node scripts/validate-config.js",
     "test": "node --test tests/*.test.js",
-    "check": "node scripts/check-syntax.js"
+    "check": "node scripts/check-syntax.js",
+    "consent-validator:test": "node --test apps/consent-validator/tests/*.test.js",
+    "consent-validator:start": "node apps/consent-validator/server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

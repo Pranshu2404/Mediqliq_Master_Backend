@@ -17,6 +17,7 @@ test('existing master frontend API groups are mounted', () => {
     '/auth/login',
     '/dashboard/stats',
     '/abdm/overview',
+    '/abdm/shared-services/health',
     '/abdm/facilities',
     '/abdm/consents',
     '/abdm/jobs',
@@ -35,7 +36,10 @@ test('M1 M2 M3 connector surfaces exist', () => {
     '/m1/proxy',
     '/m2/action',
     '/m3/action',
-    '/m3/data-relay-token'
+    '/m3/data-relay-token',
+    '/shared/fhir/validate',
+    '/shared/crypto/encrypt',
+    '/shared/consent/validate'
   ];
   for (const route of routes) assert.ok(internal.includes(route), route);
 });

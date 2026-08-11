@@ -26,3 +26,23 @@ M2 routes from the original code are retained. M3 routes include:
 - `/api/v3/hiu/health-information/data` and `/api/v3/hiu/data`
 
 Aliases are included for inconsistent hyphenation seen in supplied specifications. Before certification, reconcile paths and payloads with the assigned current ABDM V3 Postman collection.
+
+## Shared ABDM compute (hospital connector authentication required)
+
+All routes below inherit the same `X-MediQliq-*` HMAC connector authentication as M1/M2/M3. Tenant/facility identity is resolved from the authenticated `AbdmFacility`; payload fields never choose the tenant.
+
+- `GET /internal/abdm/shared/health`
+- `POST /internal/abdm/shared/fhir/validate` — forwards the validator request body to the private NRCeS/HAPI validator.
+- `POST /internal/abdm/shared/crypto/receiver-key-material`
+- `POST /internal/abdm/shared/crypto/encrypt`
+- `POST /internal/abdm/shared/crypto/decrypt`
+- `POST /internal/abdm/shared/consent/validate`
+- `POST /internal/abdm/shared/consent/usage/commit` with `{ "reservationId": "..." }`
+- `POST /internal/abdm/shared/consent/usage/release` with `{ "reservationId": "..." }`
+- `POST /internal/abdm/shared/consent/status-events`
+
+The Master forwards server-generated tenant/facility headers to private services and never includes clinical/FHIR request bodies in its shared-service audit records. Consent usage reservation IDs are mapped to the authenticated tenant before commit/release is permitted.
+
+## Super-admin shared service monitoring
+
+- `GET /api/mediqliq/abdm/shared-services/health` — super-admin-only PHI-free health summary for the Master-hosted FHIR, crypto and consent services. It returns readiness metadata only and never returns service tokens, private URLs or clinical request bodies.

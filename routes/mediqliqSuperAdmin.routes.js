@@ -24,6 +24,7 @@ router.get('/dashboard/stats', requireSuperAdmin, controller.getDashboardStats);
 // session so the static ABDM master admin key is never exposed to the browser.
 if (abdmConfig.isMaster) {
   router.get('/abdm/overview', requireSuperAdmin, mediqliqAbdmController.getOverview);
+  router.get('/abdm/shared-services/health', requireSuperAdmin, mediqliqAbdmController.getSharedServicesHealth);
 
   router.get('/abdm/gateway/health', requireSuperAdmin, abdmMasterController.gatewayHealth);
   router.patch('/abdm/gateway/bridge-url', requireSuperAdmin, abdmMasterController.updateBridge);

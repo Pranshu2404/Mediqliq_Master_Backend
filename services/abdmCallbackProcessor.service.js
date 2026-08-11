@@ -252,6 +252,7 @@ async function processAbdmJob(job) {
   let dataPushResult;
   if (connectorResponse.healthDataRequest) {
     dataPushResult = await pushHealthInformation({
+      facility,
       facilityId,
       ...connectorResponse.healthDataRequest
     });

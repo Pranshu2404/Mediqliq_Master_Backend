@@ -11,7 +11,8 @@ const auditLogger = require('./middlewares/auditLogger');
   './models/User', './models/Hospital', './models/License', './models/AuditLog',
   './models/AbdmFacility', './models/AbdmTransaction', './models/AbdmWebhookEvent',
   './models/AbdmConsent', './models/AbdmJob', './models/AbdmInternalRequest',
-  './models/AbdmHiuRequest', './models/AbdmSubscription', './models/AbdmDataRelayToken'
+  './models/AbdmHiuRequest', './models/AbdmSubscription', './models/AbdmDataRelayToken',
+  './models/AbdmSharedRateLimitBucket', './models/AbdmConsentUsageReservation'
 ].forEach((modelPath) => require(modelPath));
 
 const app = express();

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const abdmConfig = require('../config/abdm.config');
 const { notifyHealthInformation } = require('./abdmHip.service');
 const { assertSafeOutboundUrl } = require('../utils/safeOutboundUrl');
+const { encryptHealthInformation } = require('./abdmSharedInfrastructure.service');
 
 const fetchFn = (...args) => {
   if (typeof fetch === 'function') return fetch(...args);
@@ -12,36 +13,14 @@ function checksum(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
-async function externalCryptoAdapter({ transactionId, peerKeyMaterial, records }) {
-  const rawUrl = process.env.ABDM_CRYPTO_ADAPTER_URL;
-  if (!rawUrl) throw new Error('ABDM_CRYPTO_ADAPTER_URL is required when ABDM_DATA_PUSH_MODE=external');
-  const url = await assertSafeOutboundUrl(rawUrl, {
-    label: 'ABDM crypto adapter URL',
-    allowedHosts: abdmConfig.cryptoAdapterAllowedHosts,
-    requireHttps: process.env.NODE_ENV === 'production',
-    allowPrivate: process.env.NODE_ENV !== 'production' && process.env.ABDM_ALLOW_PRIVATE_ADAPTER_URLS === 'true'
-  });
-  const headers = { 'Content-Type': 'application/json' };
-  if (process.env.ABDM_CRYPTO_ADAPTER_TOKEN) headers.Authorization = `Bearer ${process.env.ABDM_CRYPTO_ADAPTER_TOKEN}`;
-  const response = await fetchFn(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ transactionId, peerKeyMaterial, records }),
-    signal: AbortSignal.timeout(Number(process.env.ABDM_CRYPTO_ADAPTER_TIMEOUT_MS || 20000)),
-    redirect: 'error'
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !Array.isArray(data.entries) || !data.keyMaterial) {
-    const error = new Error(data?.message || 'ABDM crypto adapter returned an invalid response');
-    error.details = data;
-    throw error;
-  }
-  return data;
-}
-
-async function prepareEncryptedPackage(input) {
+async function prepareEncryptedPackage(input, facility) {
   const mode = String(process.env.ABDM_DATA_PUSH_MODE || 'disabled').toLowerCase();
-  if (mode === 'external') return externalCryptoAdapter(input);
+  if (mode === 'external') {
+    if (!facility?.tenantCode) {
+      throw new Error('Authenticated facility context is required for shared ABDM crypto');
+    }
+    return encryptHealthInformation(facility, input, `data-push:${input.transactionId || crypto.randomUUID()}`);
+  }
 
   // ABDM data-flow crypto is intentionally fail-closed. The repository includes the transport
   // orchestration but does not guess the certification-critical Curve25519 envelope. Connect the
@@ -72,7 +51,7 @@ async function notifyTransfer({ facilityId, consentId, transactionId, sessionSta
   return notifyHealthInformation(facilityId, body);
 }
 
-async function pushHealthInformation({ facilityId, consentId, transactionId, dataPushUrl, peerKeyMaterial, records }) {
+async function pushHealthInformation({ facility, facilityId, consentId, transactionId, dataPushUrl, peerKeyMaterial, records }) {
   if (!Array.isArray(records) || records.length === 0) throw new Error('No health-information records were supplied for data push');
   const careContextReferences = records.map((item) => item.careContextReference).filter(Boolean);
   try {
@@ -82,7 +61,7 @@ async function pushHealthInformation({ facilityId, consentId, transactionId, dat
       requireHttps: true,
       allowPrivate: false
     });
-    const encrypted = await prepareEncryptedPackage({ transactionId, peerKeyMaterial, records });
+    const encrypted = await prepareEncryptedPackage({ transactionId, peerKeyMaterial, records }, facility);
     const entries = encrypted.entries.map((entry, index) => ({
       ...entry,
       media: entry.media || 'application/fhir+json',
