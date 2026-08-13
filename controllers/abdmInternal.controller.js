@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const config = require('../config/abdm.config');
 const { readiness } = require('../utils/abdmOnboarding');
 const { abhaRequest } = require('../services/abdmHttp.service');
+const { getGatewayToken } = require('../services/abdmAuth.service');
 const hip = require('../services/abdmHip.service');
 const hiu = require('../services/abdmHiu.service');
 const AbdmTransaction = require('../models/AbdmTransaction');
@@ -191,6 +192,16 @@ exports.proxyAbha = async (req, res) => {
       if (allowedHeaders.has(String(name).toLowerCase()) && value) {
         safeHeaders[name] = String(value);
       }
+    }
+
+    // PHR profile APIs require the logged-in patient's X-token plus an
+    // X-AUTH-TOKEN. Master owns the ABDM client/session credential, so inject
+    // that credential here instead of exposing it to Hospital backend.
+    if (normalizedPath.startsWith('/v3/phr/app/login/profile')) {
+      const hasXAuthToken = Object.keys(safeHeaders).some(
+        (name) => String(name).toLowerCase() === 'x-auth-token'
+      );
+      if (!hasXAuthToken) safeHeaders['X-AUTH-TOKEN'] = await getGatewayToken();
     }
 
     const data = await abhaRequest(path, {
