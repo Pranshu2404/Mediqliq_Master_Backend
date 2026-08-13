@@ -241,3 +241,63 @@ exports.listSubscriptions = async (req, res) => {
   const subscriptions = await AbdmSubscription.find(filter).sort({ createdAt: -1 }).limit(200).lean();
   return res.json({ success: true, subscriptions });
 };
+
+exports.getPhrCapabilities = async (req, res) => {
+  try {
+    const {
+      PHR_APP_ABHA_OPERATIONS,
+      FACE_AUTH_ABHA_OPERATIONS,
+      PHR_HIU_ACTIONS,
+      PHR_USER_INITIATED_CALLBACKS
+    } = require('../config/abdmPhrCapabilities');
+
+    const phrFlows = [
+      'M1_FACE_AUTH',
+      'PHR_PROFILE',
+      'USER_DISCOVERY',
+      'USER_LINK_INIT',
+      'USER_LINK_CONFIRM',
+      'M3_CONSENT',
+      'M3_CONSENT_STATUS',
+      'M3_CONSENT_FETCH',
+      'M3_HEALTH_INFORMATION_REQUEST',
+      'M3_HEALTH_INFORMATION_RECEIVE',
+      'M3_SUBSCRIPTION'
+    ];
+    const recent = await AbdmTransaction.find({ flow: { $in: phrFlows } })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+    const counts = await AbdmTransaction.aggregate([
+      { $match: { flow: { $in: phrFlows } } },
+      { $group: { _id: '$flow', count: { $sum: 1 } } }
+    ]);
+
+    return res.json({
+      success: true,
+      environment: abdmConfig.environment,
+      features: {
+        m1: abdmConfig.featureM1,
+        m2: abdmConfig.featureM2,
+        m3: abdmConfig.featureM3,
+        subscriptions: abdmConfig.featureSubscriptions
+      },
+      faceAuth: {
+        mode: 'ABHA_APP_QR_OR_INTENT',
+        capturePidPolling: true,
+        legacyBrowserFacePidRequired: false,
+        operations: FACE_AUTH_ABHA_OPERATIONS
+      },
+      phrApp: {
+        abhaOperations: PHR_APP_ABHA_OPERATIONS,
+        hiuActions: PHR_HIU_ACTIONS,
+        callbacks: PHR_USER_INITIATED_CALLBACKS
+      },
+      transactionCounts: countMap(counts),
+      recentTransactions: recent
+    });
+  } catch (error) {
+    req.auditError = { message: error.message };
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

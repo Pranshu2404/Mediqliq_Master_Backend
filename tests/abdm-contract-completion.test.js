@@ -59,3 +59,55 @@ test('public callback metadata does not persist patient authentication tokens', 
   const publicController = source('controllers/abdmPublic.controller.js');
   assert.doesNotMatch(publicController, /'x-auth-token': req\.headers\['x-auth-token'\]/);
 });
+
+test('PHR V3 app registration, login and profile operations are allow-listed', () => {
+  const capabilities = source('config/abdmPhrCapabilities.js');
+  for (const operation of [
+    'POST /v3/phr/app/enrollment/request/otp',
+    'POST /v3/phr/app/enrollment/verify',
+    'POST /v3/phr/app/enrollment/enrol',
+    'POST /v3/phr/app/login/request/otp',
+    'POST /v3/phr/app/login/verify',
+    'POST /v3/phr/app/login/verify/user',
+    'GET /v3/phr/app/login/profile',
+    'GET /v3/phr/app/login/profile/qrCode',
+    'GET /v3/phr/app/login/profile/phrCard',
+    'GET /v3/phr/app/login/profile/request/token',
+    'GET /v3/phr/app/login/profile/request/logout'
+  ]) assert.ok(capabilities.includes(`'${operation}'`), `${operation} must be declared`);
+});
+
+test('PHR V3 patient consent lifecycle and user-initiated linking actions are implemented', () => {
+  const controller = source('controllers/abdmInternal.controller.js');
+  const hiu = source('services/abdmHiu.service.js');
+  for (const action of [
+    'LIST_CONSENT_REQUESTS', 'GET_CONSENT_REQUEST', 'GET_CONSENT_ARTEFACTS_BY_REQUEST',
+    'GET_CONSENT_ARTEFACT', 'LIST_CONSENT_ARTEFACTS', 'CREATE_CONSENT_AUTO_APPROVE',
+    'DISABLE_CONSENT_AUTO_APPROVE', 'ENABLE_CONSENT_AUTO_APPROVE', 'DENY_CONSENT_REQUEST',
+    'REVOKE_CONSENT', 'GET_HEALTH_INFORMATION_STATUS', 'PHR_DISCOVER_HEALTH_RECORDS',
+    'PHR_LINK_CARE_CONTEXT_INIT', 'PHR_LINK_CARE_CONTEXT_CONFIRM', 'PHR_LIST_PROVIDERS'
+  ]) assert.ok(controller.includes(action), `${action} must be routed`);
+  for (const endpoint of [
+    '/consent/v3/auto/approve', '/consent/v3/revoke',
+    '/data-flow/v3/health-information/request/status/',
+    '/user-initiated-linking/v3/patient/care-context/discover',
+    '/user-initiated-linking/v3/link/care-context/init',
+    '/user-initiated-linking/v3/link/care-context/confirm',
+    '/gateway/v3/providers'
+  ]) assert.ok(hiu.includes(endpoint), `${endpoint} must be implemented`);
+});
+
+test('PHR patient user-initiated linking callbacks are publicly routed', () => {
+  const routes = source('routes/abdmPublic.routes.js');
+  const processor = source('services/abdmCallbackProcessor.service.js');
+  for (const callbackPath of [
+    '/hiu/patient/care-context/on-discover',
+    '/hiu/patient/care-context/on-init',
+    '/hiu/patient/care-context/on-confirm'
+  ]) assert.ok(routes.includes(callbackPath), `${callbackPath} callback must exist`);
+  for (const connectorPath of [
+    '/internal/abdm/hiu/patient/care-context/on-discover',
+    '/internal/abdm/hiu/patient/care-context/on-init',
+    '/internal/abdm/hiu/patient/care-context/on-confirm'
+  ]) assert.ok(processor.includes(connectorPath), `${connectorPath} connector route must exist`);
+});

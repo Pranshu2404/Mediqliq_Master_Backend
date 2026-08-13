@@ -18,6 +18,7 @@ test('existing master frontend API groups are mounted', () => {
     '/dashboard/stats',
     '/abdm/overview',
     '/abdm/shared-services/health',
+    '/abdm/phr-capabilities',
     '/abdm/facilities',
     '/abdm/consents',
     '/abdm/jobs',

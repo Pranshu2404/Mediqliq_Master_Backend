@@ -9,6 +9,9 @@ const AbdmConsent = require('../models/AbdmConsent');
 const AbdmHiuRequest = require('../models/AbdmHiuRequest');
 const AbdmDataRelayToken = require('../models/AbdmDataRelayToken');
 const { sanitizeDependencyReport } = require('../utils/abdmDependencyStatus');
+const {
+  PHR_APP_ABHA_OPERATIONS
+} = require('../config/abdmPhrCapabilities');
 
 const ABHA_ALLOWLIST = new Set([
   'GET /v3/profile/public/certificate',
@@ -43,7 +46,8 @@ const ABHA_ALLOWLIST = new Set([
   'POST /v3/phr/web/login/abha/verify',
   'GET /v3/phr/web/login/profile/abha-profile',
   'GET /v3/phr/web/login/profile/abha/phr-card',
-  'GET /v3/phr/web/login/profile/abha/qr-code'
+  'GET /v3/phr/web/login/profile/abha/qr-code',
+  ...PHR_APP_ABHA_OPERATIONS
 ]);
 
 function facilityIdentity(req, role = 'hip') {
@@ -130,6 +134,7 @@ exports.dependencyStatus = async (req, res) => {
 };
 
 exports.proxyAbha = async (req, res) => {
+  let transaction;
   try {
     if (!config.featureM1) {
       return res.status(409).json({ error: 'M1 is disabled' });
@@ -153,6 +158,26 @@ exports.proxyAbha = async (req, res) => {
       });
     }
 
+    const scopes = Array.isArray(body?.scope) ? body.scope.map(String) : [];
+    const isFaceAuth =
+      scopes.some((scope) => scope.toLowerCase().includes('face')) ||
+      normalizedPath.includes('/capturePID') ||
+      normalizedPath.endsWith('/enrol/auth/init');
+    const isPhrProfile = normalizedPath.startsWith('/v3/phr/app/');
+    transaction = await AbdmTransaction.create({
+      requestId: req.abdmInternalRequestId || crypto.randomUUID(),
+      facilityId: facilityIdentity(req),
+      flow: isPhrProfile ? 'PHR_PROFILE' : (isFaceAuth ? 'M1_FACE_AUTH' : 'M1_IDENTITY'),
+      direction: 'OUTBOUND',
+      status: 'PROCESSING',
+      correlation: {
+        operation,
+        module: isPhrProfile ? 'PHR_APP' : 'M1',
+        faceAuth: isFaceAuth === true
+      },
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    });
+
     const safeHeaders = {};
     const allowedHeaders = new Set([
       'x-token',
@@ -175,6 +200,11 @@ exports.proxyAbha = async (req, res) => {
       responseType
     });
 
+    if (transaction) {
+      transaction.status = 'COMPLETED';
+      await transaction.save();
+    }
+
     if (responseType === 'buffer') {
       return res.json({
         success: true,
@@ -185,6 +215,14 @@ exports.proxyAbha = async (req, res) => {
 
     return res.json({ success: true, data });
   } catch (error) {
+    if (transaction) {
+      transaction.status = 'FAILED';
+      transaction.error = {
+        message: error.message,
+        statusCode: error.statusCode
+      };
+      await transaction.save().catch(() => undefined);
+    }
     return res.status(error.statusCode || 502).json({
       success: false,
       error: error.message,
@@ -317,6 +355,46 @@ exports.hiuAction = async (req, res) => {
         flow: 'M3_CONSENT_FETCH',
         execute: () => hiu.fetchConsent(hiuId, body, requestId)
       },
+      LIST_CONSENT_REQUESTS: {
+        flow: 'M3_CONSENT',
+        execute: () => hiu.listConsentRequests(hiuId, query, requestId, authToken)
+      },
+      GET_CONSENT_REQUEST: {
+        flow: 'M3_CONSENT',
+        execute: () => hiu.getConsentRequest(hiuId, resourceId, requestId, authToken)
+      },
+      GET_CONSENT_ARTEFACTS_BY_REQUEST: {
+        flow: 'M3_CONSENT_FETCH',
+        execute: () => hiu.consentArtefactsByRequest(hiuId, resourceId, requestId, authToken)
+      },
+      GET_CONSENT_ARTEFACT: {
+        flow: 'M3_CONSENT_FETCH',
+        execute: () => hiu.getConsentArtefact(hiuId, resourceId, requestId, authToken)
+      },
+      LIST_CONSENT_ARTEFACTS: {
+        flow: 'M3_CONSENT_FETCH',
+        execute: () => hiu.listConsentArtefacts(hiuId, query, requestId, authToken)
+      },
+      CREATE_CONSENT_AUTO_APPROVE: {
+        flow: 'M3_CONSENT',
+        execute: () => hiu.createConsentAutoApprove(hiuId, body, requestId, authToken)
+      },
+      DISABLE_CONSENT_AUTO_APPROVE: {
+        flow: 'M3_CONSENT',
+        execute: () => hiu.disableConsentAutoApprove(hiuId, resourceId, requestId, authToken)
+      },
+      ENABLE_CONSENT_AUTO_APPROVE: {
+        flow: 'M3_CONSENT',
+        execute: () => hiu.enableConsentAutoApprove(hiuId, resourceId, requestId, authToken)
+      },
+      DENY_CONSENT_REQUEST: {
+        flow: 'M3_CONSENT',
+        execute: () => hiu.denyConsentRequest(hiuId, resourceId, body, requestId, authToken)
+      },
+      REVOKE_CONSENT: {
+        flow: 'M3_CONSENT',
+        execute: () => hiu.revokeConsent(hiuId, body, requestId, authToken)
+      },
       ACK_CONSENT_NOTIFY: {
         flow: 'M3_CONSENT',
         execute: () => hiu.acknowledgeConsentNotify(hiuId, body, requestId)
@@ -328,6 +406,38 @@ exports.hiuAction = async (req, res) => {
       NOTIFY_HEALTH_INFORMATION: {
         flow: 'M3_HEALTH_INFORMATION_RECEIVE',
         execute: () => hiu.notifyHealthInformation(hiuId, body, requestId)
+      },
+      GET_HEALTH_INFORMATION_STATUS: {
+        flow: 'M3_HEALTH_INFORMATION_REQUEST',
+        execute: () => hiu.healthInformationStatus(hiuId, resourceId, requestId, authToken)
+      },
+      PHR_DISCOVER_HEALTH_RECORDS: {
+        flow: 'USER_DISCOVERY',
+        execute: () => hiu.discoverHealthRecords(hiuId, body, requestId, authToken)
+      },
+      PHR_LINK_CARE_CONTEXT_INIT: {
+        flow: 'USER_LINK_INIT',
+        execute: () => hiu.initHealthRecordLink(hiuId, body, requestId, authToken)
+      },
+      PHR_LINK_CARE_CONTEXT_CONFIRM: {
+        flow: 'USER_LINK_CONFIRM',
+        execute: () => hiu.confirmHealthRecordLink(hiuId, body, requestId, authToken)
+      },
+      PHR_LIST_LINKS: {
+        flow: 'USER_DISCOVERY',
+        execute: () => hiu.listPatientLinks(hiuId, query, requestId, authToken)
+      },
+      PHR_LIST_PROVIDERS: {
+        flow: 'USER_DISCOVERY',
+        execute: () => hiu.listProviders(hiuId, query, requestId, authToken)
+      },
+      PHR_GET_PROVIDER: {
+        flow: 'USER_DISCOVERY',
+        execute: () => hiu.getProvider(hiuId, resourceId, requestId, authToken)
+      },
+      PHR_GOVT_PROGRAMS: {
+        flow: 'USER_DISCOVERY',
+        execute: () => hiu.govtPrograms(hiuId, query, requestId, authToken)
       },
       REQUEST_RUNNING_TOKEN_STATUS: {
         flow: 'RUNNING_TOKEN_STATUS',
@@ -411,7 +521,17 @@ exports.hiuAction = async (req, res) => {
     }
 
     const patientAuthenticatedActions = new Set([
-      'REQUEST_RUNNING_TOKEN_STATUS', 'APPROVE_SUBSCRIPTION', 'DENY_SUBSCRIPTION',
+      'REQUEST_RUNNING_TOKEN_STATUS',
+      'LIST_CONSENT_REQUESTS', 'GET_CONSENT_REQUEST',
+      'GET_CONSENT_ARTEFACTS_BY_REQUEST', 'GET_CONSENT_ARTEFACT',
+      'LIST_CONSENT_ARTEFACTS', 'CREATE_CONSENT_AUTO_APPROVE',
+      'DISABLE_CONSENT_AUTO_APPROVE', 'ENABLE_CONSENT_AUTO_APPROVE',
+      'DENY_CONSENT_REQUEST', 'REVOKE_CONSENT',
+      'GET_HEALTH_INFORMATION_STATUS',
+      'PHR_DISCOVER_HEALTH_RECORDS', 'PHR_LINK_CARE_CONTEXT_INIT',
+      'PHR_LINK_CARE_CONTEXT_CONFIRM', 'PHR_LIST_LINKS',
+      'PHR_LIST_PROVIDERS', 'PHR_GET_PROVIDER', 'PHR_GOVT_PROGRAMS',
+      'APPROVE_SUBSCRIPTION', 'DENY_SUBSCRIPTION',
       'LIST_SUBSCRIPTION_REQUESTS', 'GET_SUBSCRIPTION_REQUEST', 'GET_SUBSCRIPTION',
       'EDIT_SUBSCRIPTION', 'DISABLE_SUBSCRIPTION', 'ENABLE_SUBSCRIPTION',
       'PATIENT_SUBSCRIPTION_REQUESTS', 'SETUP_HEALTH_LOCKER',
@@ -421,6 +541,10 @@ exports.hiuAction = async (req, res) => {
       return res.status(400).json({ error: 'A server-side ABDM patient authentication token is required' });
     }
     const resourceActions = new Set([
+      'GET_CONSENT_REQUEST', 'GET_CONSENT_ARTEFACTS_BY_REQUEST',
+      'GET_CONSENT_ARTEFACT', 'DISABLE_CONSENT_AUTO_APPROVE',
+      'ENABLE_CONSENT_AUTO_APPROVE', 'DENY_CONSENT_REQUEST',
+      'GET_HEALTH_INFORMATION_STATUS', 'PHR_GET_PROVIDER',
       'APPROVE_SUBSCRIPTION', 'DENY_SUBSCRIPTION', 'GET_SUBSCRIPTION_REQUEST',
       'GET_SUBSCRIPTION', 'EDIT_SUBSCRIPTION', 'DISABLE_SUBSCRIPTION',
       'ENABLE_SUBSCRIPTION', 'GET_PATIENT_LOCKER'

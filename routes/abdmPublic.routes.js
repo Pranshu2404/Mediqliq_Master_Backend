@@ -37,6 +37,13 @@ if (config.featureM3) {
   router.post('/hiu/health-information/onrequest', controller.hiuHealthInformationOnRequest);
   router.post('/hiu/health-information/data', controller.hiuDataPush);
   router.post('/hiu/data', controller.hiuDataPush);
+  // PHR/Patient HIU callbacks for user-initiated discovery and care-context linking.
+  router.post('/hiu/patient/care-context/on-discover', controller.hiuPatientCareContextOnDiscover);
+  router.post('/hiu/patient/carecontext/on-discover', controller.hiuPatientCareContextOnDiscover);
+  router.post('/hiu/patient/care-context/on-init', controller.hiuPatientCareContextOnInit);
+  router.post('/hiu/patient/carecontext/on-init', controller.hiuPatientCareContextOnInit);
+  router.post('/hiu/patient/care-context/on-confirm', controller.hiuPatientCareContextOnConfirm);
+  router.post('/hiu/patient/carecontext/on-confirm', controller.hiuPatientCareContextOnConfirm);
   if (config.featureSubscriptions) {
     router.post('/hiu/hiecm/subscription-requests/on-init', controller.hiuSubscriptionOnInit);
     router.post('/hiu/subscription-requests/hiu/notify', controller.hiuSubscriptionNotify);

@@ -25,6 +25,7 @@ router.get('/dashboard/stats', requireSuperAdmin, controller.getDashboardStats);
 if (abdmConfig.isMaster) {
   router.get('/abdm/overview', requireSuperAdmin, mediqliqAbdmController.getOverview);
   router.get('/abdm/shared-services/health', requireSuperAdmin, mediqliqAbdmController.getSharedServicesHealth);
+  router.get('/abdm/phr-capabilities', requireSuperAdmin, mediqliqAbdmController.getPhrCapabilities);
 
   router.get('/abdm/gateway/health', requireSuperAdmin, abdmMasterController.gatewayHealth);
   router.patch('/abdm/gateway/bridge-url', requireSuperAdmin, abdmMasterController.updateBridge);

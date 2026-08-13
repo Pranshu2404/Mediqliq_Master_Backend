@@ -31,6 +31,12 @@ const CONNECTOR_PATH_BY_EVENT = Object.freeze({
   HIU_HEALTH_INFORMATION_ON_REQUEST:
     '/internal/abdm/hiu/health-information/on-request',
   HIU_DATA_PUSH: '/internal/abdm/hiu/data',
+  HIU_PATIENT_CARE_CONTEXT_ON_DISCOVER:
+    '/internal/abdm/hiu/patient/care-context/on-discover',
+  HIU_PATIENT_CARE_CONTEXT_ON_INIT:
+    '/internal/abdm/hiu/patient/care-context/on-init',
+  HIU_PATIENT_CARE_CONTEXT_ON_CONFIRM:
+    '/internal/abdm/hiu/patient/care-context/on-confirm',
   HIU_SUBSCRIPTION_ON_INIT: '/internal/abdm/hiu/subscription/on-init',
   HIU_SUBSCRIPTION_NOTIFY: '/internal/abdm/hiu/subscription/notify',
   HIU_SUBSCRIPTION_CARE_CONTEXT_NOTIFY:

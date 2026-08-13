@@ -42,6 +42,10 @@ function extractTransactionId(body = {}) {
 }
 
 function eventFlow(eventType) {
+  if (eventType === 'HIU_PATIENT_CARE_CONTEXT_ON_DISCOVER') return 'USER_DISCOVERY';
+  if (eventType === 'HIU_PATIENT_CARE_CONTEXT_ON_INIT') return 'USER_LINK_INIT';
+  if (eventType === 'HIU_PATIENT_CARE_CONTEXT_ON_CONFIRM') return 'USER_LINK_CONFIRM';
+
   if (eventType.startsWith('HIU_CONSENT')) {
     if (eventType.includes('STATUS')) return 'M3_CONSENT_STATUS';
     if (eventType.includes('FETCH')) return 'M3_CONSENT_FETCH';
@@ -281,6 +285,9 @@ exports.hiuHealthInformationOnRequest = callback(
   'HIU_HEALTH_INFORMATION_ON_REQUEST'
 );
 exports.hiuDataPush = callback('HIU_DATA_PUSH');
+exports.hiuPatientCareContextOnDiscover = callback('HIU_PATIENT_CARE_CONTEXT_ON_DISCOVER');
+exports.hiuPatientCareContextOnInit = callback('HIU_PATIENT_CARE_CONTEXT_ON_INIT');
+exports.hiuPatientCareContextOnConfirm = callback('HIU_PATIENT_CARE_CONTEXT_ON_CONFIRM');
 exports.hiuSubscriptionOnInit = callback('HIU_SUBSCRIPTION_ON_INIT');
 exports.hiuSubscriptionNotify = callback('HIU_SUBSCRIPTION_NOTIFY');
 exports.hiuCareContextNotify = callback(

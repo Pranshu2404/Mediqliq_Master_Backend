@@ -26,6 +26,9 @@ const abdmTransactionSchema = new mongoose.Schema(
         'M3_HEALTH_INFORMATION_REQUEST',
         'M3_HEALTH_INFORMATION_RECEIVE',
         'M3_SUBSCRIPTION',
+        'M1_IDENTITY',
+        'M1_FACE_AUTH',
+        'PHR_PROFILE',
         'OTHER'
       ],
       index: true
