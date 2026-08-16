@@ -352,7 +352,17 @@ exports.registerFacilityServices = async (req, res) => {
       facilityName: facility.hfr?.facilityName,
       HRP: services
     };
+    const wasLinked = facility.abdm?.linkageStatus === 'LINKED';
     const data = await registerBridgeServices(payload);
+    const providerErrors = (Array.isArray(data) ? data : [data])
+      .flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        if (item.error) return [item.error];
+        if (Array.isArray(item.errors)) return item.errors;
+        return [];
+      })
+      .filter(Boolean);
+
     facility.metadata = {
       ...(facility.metadata || {}),
       serviceRegistration: {
@@ -362,10 +372,34 @@ exports.registerFacilityServices = async (req, res) => {
         response: data
       }
     };
-    facility.abdm.linkageStatus = 'PENDING';
-    facility.onboardingStatus = 'SOFTWARE_LINKAGE_PENDING';
+
+    // Registration is a provisioning action, not proof that a previously
+    // verified bridge/HIP linkage disappeared. Never downgrade LINKED merely
+    // because register-services is called afterwards. This is especially
+    // important when ABDM returns a business error inside an HTTP-2xx body.
+    if (!wasLinked) {
+      facility.abdm.linkageStatus = providerErrors.length ? 'FAILED' : 'PENDING';
+      facility.onboardingStatus = 'SOFTWARE_LINKAGE_PENDING';
+    }
     await facility.save();
-    return res.status(202).json({ success: true, data, facility: cleanFacility(facility) });
+
+    if (providerErrors.length) {
+      const first = providerErrors[0] || {};
+      return res.status(409).json({
+        success: false,
+        error: first.message || first.code || 'ABDM bridge-service registration was rejected',
+        details: data,
+        linkagePreserved: wasLinked,
+        facility: cleanFacility(facility)
+      });
+    }
+
+    return res.status(202).json({
+      success: true,
+      data,
+      linkagePreserved: wasLinked,
+      facility: cleanFacility(facility)
+    });
   } catch (error) {
     return res.status(error.statusCode || 502).json({ success: false, error: error.message, details: error.details });
   }
