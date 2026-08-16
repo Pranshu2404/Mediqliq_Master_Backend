@@ -1,7 +1,7 @@
 FROM gradle:7.6.4-jdk17-alpine AS engine-build
 WORKDIR /src
 COPY engine/ .
-RUN ./gradlew --no-daemon clean bootJar
+RUN gradle --no-daemon clean bootJar
 
 FROM node:20-bookworm-slim
 RUN apt-get update \
@@ -12,7 +12,7 @@ WORKDIR /app
 COPY --from=engine-build /src/build/libs/*.jar /app/fidelius-engine.jar
 COPY facade/ /app/facade/
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chown -R crypto:crypto /app
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh && chown -R crypto:crypto /app
 USER crypto
 ENV PORT=8090 FIDELIUS_ENGINE_URL=http://127.0.0.1:8091
 EXPOSE 8090

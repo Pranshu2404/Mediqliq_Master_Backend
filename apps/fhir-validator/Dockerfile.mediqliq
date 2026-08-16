@@ -1,7 +1,7 @@
-FROM gradle:8.10.2-jdk17-alpine AS build
+FROM gradle:8.10.2-jdk17 AS build
 WORKDIR /src
 COPY . .
-RUN ./gradlew --no-daemon clean jvmJar
+RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew && ./gradlew --no-daemon clean jvmJar
 
 FROM eclipse-temurin:17-jre-alpine
 ARG APP_USER=validator
