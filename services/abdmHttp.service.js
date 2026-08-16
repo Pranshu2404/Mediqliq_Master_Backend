@@ -47,6 +47,9 @@ async function authorizedRequest(url, options = {}, retry = true) {
     return authorizedRequest(url, options, false);
   }
 
+  // ABDM M1 and PHR contracts used by the hospital return their patient
+  // token material in the documented response body. Keep this HTTP service
+  // transport-neutral instead of promoting response headers into token semantics.
   const data = await parseResponse(response, options.responseType || 'json');
   if (!response.ok) {
     throw makeError(options.errorPrefix || 'ABDM API failed', response, data);

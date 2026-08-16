@@ -164,21 +164,24 @@ exports.proxyAbha = async (req, res) => {
       scopes.some((scope) => scope.toLowerCase().includes('face')) ||
       normalizedPath.includes('/capturePID') ||
       normalizedPath.endsWith('/enrol/auth/init');
-    const isPhrProfile = normalizedPath.startsWith('/v3/phr/app/');
+    const isPhrApp = normalizedPath.startsWith('/v3/phr/app/');
     transaction = await AbdmTransaction.create({
       requestId: req.abdmInternalRequestId || crypto.randomUUID(),
       facilityId: facilityIdentity(req),
-      flow: isPhrProfile ? 'PHR_PROFILE' : (isFaceAuth ? 'M1_FACE_AUTH' : 'M1_IDENTITY'),
+      flow: isPhrApp ? 'PHR_PROFILE' : (isFaceAuth ? 'M1_FACE_AUTH' : 'M1_IDENTITY'),
       direction: 'OUTBOUND',
       status: 'PROCESSING',
       correlation: {
         operation,
-        module: isPhrProfile ? 'PHR_APP' : 'M1',
+        module: isPhrApp ? 'PHR_APP' : 'M1',
         faceAuth: isFaceAuth === true
       },
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
 
+    // Master is a transport/security boundary only. It does not infer whether
+    // a patient token is an M1 X-token, a PHR T/X-token, or an HIE-CM token.
+    // Token semantics remain inside the hospital-side flow that owns the API family.
     const safeHeaders = {};
     const allowedHeaders = new Set([
       'x-token',
