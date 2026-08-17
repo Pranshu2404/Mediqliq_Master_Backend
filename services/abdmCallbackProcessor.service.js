@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const AbdmJob = require('../models/AbdmJob');
 const AbdmTransaction = require('../models/AbdmTransaction');
 const AbdmWebhookEvent = require('../models/AbdmWebhookEvent');
@@ -70,21 +71,72 @@ async function executeOutbound(facilityId, items = []) {
       throw new Error(`Unsupported outbound action: ${item.action}`);
     }
 
-    if (item.action === 'LINK_CARE_CONTEXT') {
+    let outboundTransaction;
+    if (item.action === 'LINK_CARE_CONTEXT' && item.requestId) {
+      // The callback-driven LINK_CARE_CONTEXT action previously bypassed the
+      // transaction store, which made diagnostics report an empty transaction
+      // list even though the Hospital had already generated a request ID.
       // eslint-disable-next-line no-await-in-loop
-      results.push(
-        await hip.linkCareContext(
+      outboundTransaction = await AbdmTransaction.findOneAndUpdate(
+        {
+          facilityId,
+          requestId: item.requestId,
+          flow: 'HIP_CARE_CONTEXT_LINK',
+          direction: 'OUTBOUND'
+        },
+        {
+          $setOnInsert: {
+            facilityId,
+            requestId: item.requestId,
+            flow: 'HIP_CARE_CONTEXT_LINK',
+            direction: 'OUTBOUND',
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+          },
+          $set: {
+            status: 'PROCESSING',
+            correlation: { action: item.action }
+          },
+          $unset: { error: '' }
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    try {
+      let result;
+      if (item.action === 'LINK_CARE_CONTEXT') {
+        // eslint-disable-next-line no-await-in-loop
+        result = await hip.linkCareContext(
           facilityId,
           item.linkToken,
           item.body,
           item.requestId
-        )
-      );
-    } else {
-      // eslint-disable-next-line no-await-in-loop
-      results.push(
-        await handler(facilityId, item.body, item.requestId)
-      );
+        );
+      } else {
+        // eslint-disable-next-line no-await-in-loop
+        result = await handler(facilityId, item.body, item.requestId);
+      }
+      results.push(result);
+
+      if (outboundTransaction) {
+        // eslint-disable-next-line no-await-in-loop
+        await AbdmTransaction.findByIdAndUpdate(outboundTransaction._id, {
+          status: 'WAITING_CALLBACK'
+        });
+      }
+    } catch (error) {
+      if (outboundTransaction) {
+        // eslint-disable-next-line no-await-in-loop
+        await AbdmTransaction.findByIdAndUpdate(outboundTransaction._id, {
+          status: 'FAILED',
+          error: {
+            message: error.message,
+            details: error.details,
+            at: new Date()
+          }
+        });
+      }
+      throw error;
     }
   }
 
@@ -237,6 +289,15 @@ async function processAbdmJob(job) {
   const consent = await consentForHipEvent(eventType, facilityId, body);
   await updateM3Metadata(eventType, facilityId, body);
 
+  // A callback job retry must use a fresh connector-delivery request ID.
+  // The previous implementation reused job._id on every retry, so the HIMS
+  // replay guard correctly rejected attempt 2 as "Duplicate connector request
+  // rejected", hiding the real failure that happened after attempt 1.
+  const connectorDeliveryRequestId =
+    Number(job.attempts || 0) === 0
+      ? job._id.toString()
+      : crypto.randomUUID();
+
   const connectorResponse = await forwardToHospital(
     facility,
     connectorPath,
@@ -247,7 +308,7 @@ async function processAbdmJob(job) {
       consent,
       receivedAt: job.createdAt
     },
-    { requestId: job._id.toString() }
+    { requestId: connectorDeliveryRequestId }
   );
 
   const outboundResults = await executeOutbound(

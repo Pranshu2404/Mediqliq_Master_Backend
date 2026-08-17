@@ -9,6 +9,7 @@ const AbdmTransaction = require('../models/AbdmTransaction');
 const AbdmConsent = require('../models/AbdmConsent');
 const AbdmHiuRequest = require('../models/AbdmHiuRequest');
 const AbdmDataRelayToken = require('../models/AbdmDataRelayToken');
+const AbdmJob = require('../models/AbdmJob');
 const { sanitizeDependencyReport } = require('../utils/abdmDependencyStatus');
 const {
   PHR_APP_ABHA_OPERATIONS
@@ -334,6 +335,69 @@ exports.hipAction = async (req, res) => {
     });
   } catch (error) {
     return res.status(error.statusCode || 502).json({
+      success: false,
+      error: error.message,
+      details: error.details
+    });
+  }
+};
+
+
+exports.retryM2LinkCallback = async (req, res) => {
+  try {
+    if (!config.featureM2) {
+      return res.status(409).json({ error: 'M2 is disabled' });
+    }
+
+    const facilityId = facilityIdentity(req);
+    const originalRequestId = String(
+      req.body?.originalRequestId || ''
+    ).trim();
+
+    if (!originalRequestId) {
+      return res.status(400).json({
+        error: 'originalRequestId is required'
+      });
+    }
+
+    const job = await AbdmJob.findOne({
+      type: 'PROCESS_ABDM_CALLBACK',
+      facilityId,
+      'payload.eventType': 'HIP_LINK_TOKEN_CALLBACK',
+      'payload.body.response.requestId': originalRequestId
+    }).sort({ createdAt: -1 });
+
+    if (!job) {
+      return res.status(404).json({
+        error:
+          'No HIP link-token callback job was found for this pending care context'
+      });
+    }
+
+    if (job.status === 'RUNNING') {
+      return res.status(409).json({
+        error: 'The callback job is already running',
+        jobId: job._id
+      });
+    }
+
+    job.status = 'PENDING';
+    job.runAfter = new Date();
+    job.lockedAt = null;
+    job.lastError = undefined;
+    await job.save();
+
+    return res.status(202).json({
+      success: true,
+      mode: 'CALLBACK_JOB_RETRY',
+      jobId: job._id,
+      originalRequestId,
+      attempts: job.attempts,
+      message:
+        'The existing HIP link-token callback job was queued for retry.'
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
       success: false,
       error: error.message,
       details: error.details

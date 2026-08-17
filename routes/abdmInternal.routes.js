@@ -22,6 +22,7 @@ router.post('/proxy/abha', controller.proxyAbha);
 router.post('/m1/proxy', controller.proxyAbha);
 router.post('/hip/action', controller.hipAction);
 router.post('/m2/action', controller.hipAction);
+router.post('/m2/retry-link-callback', controller.retryM2LinkCallback);
 router.post('/hiu/action', controller.hiuAction);
 router.post('/m3/action', controller.hiuAction);
 router.post('/m3/data-relay-token', controller.createDataRelayToken);
