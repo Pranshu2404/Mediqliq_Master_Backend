@@ -8,16 +8,21 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       MEDIQLIQ_SERVICE_TOKEN: ${ABDM_FHIR_VALIDATOR_TOKEN:-mediqliq_secret_service_token_32_characters_long_min}
+      # Dedicated ABDM validator: cap JVM heap so Docker Desktop is not OOM-killed.
+      JAVA_TOOL_OPTIONS: ${ABDM_FHIR_VALIDATOR_JAVA_TOOL_OPTIONS:--Xms512m -Xmx3072m -XX:+UseG1GC -XX:+CrashOnOutOfMemoryError}
     expose: ["3500"]
     # Loopback binding supports a Master API running as a host process without
     # exposing the validator to the public/LAN network. Containerized Master API
     # deployments should use the service DNS name on abdm-internal instead.
     ports: ["127.0.0.1:3500:3500"]
     networks: [abdm-internal]
+    # `deploy.resources` is not a reliable local Docker Compose limit.  Use
+    # mem_limit as well so the JVM sees a real cgroup boundary.
+    mem_limit: ${ABDM_FHIR_VALIDATOR_MEMORY_LIMIT:-4g}
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 4G
 
   mediqliq-crypto-adapter:
     build:
