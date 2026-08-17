@@ -73,12 +73,16 @@ function stripProofFields(value) {
 }
 
 function consentRoot(input = {}) {
+  const consentEnvelope = input.consent && typeof input.consent === 'object'
+    ? input.consent
+    : null;
   return (
     input.consentDetail ||
+    consentEnvelope?.consentDetail ||
     input.consentArtefact ||
-    input.consent ||
     input.notification?.consentDetail ||
     input.notification?.consentArtefact ||
+    consentEnvelope ||
     input.notification ||
     input
   );
@@ -89,7 +93,7 @@ function normalizeConsent(input = {}) {
   const permission = root.permission || input.permission || {};
   const errors = [];
   const status = String(
-    firstDefined(root.status, input.status, input.notification?.status, 'PENDING')
+    firstDefined(root.status, input.consent?.status, input.status, input.notification?.status, 'PENDING')
   ).toUpperCase();
   const dateRange = permission.dateRange || root.dateRange || input.dateRange || {};
   const careContexts = asArray(

@@ -76,6 +76,7 @@ function findCompactJws(request = {}) {
     request.jws,
     artefact.proof?.jws,
     typeof artefact.signature === 'string' ? artefact.signature : artefact.signature?.jws,
+    typeof artefact.consent?.signature === 'string' ? artefact.consent.signature : artefact.consent?.signature?.jws,
     artefact.signedConsent,
     typeof root.signature === 'string' ? root.signature : root.signature?.jws,
     root.proof?.jws,
@@ -88,12 +89,16 @@ function findCompactJws(request = {}) {
 
 function extractSignedConsent(payload) {
   if (!payload || typeof payload !== 'object') return payload;
+  const consentEnvelope = payload.consent && typeof payload.consent === 'object'
+    ? payload.consent
+    : null;
   return (
     payload.consentDetail ||
+    consentEnvelope?.consentDetail ||
     payload.consentArtefact ||
-    payload.consent ||
     payload.notification?.consentDetail ||
     payload.notification?.consentArtefact ||
+    consentEnvelope ||
     payload.notification ||
     payload
   );
