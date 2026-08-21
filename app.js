@@ -8,7 +8,7 @@ const auditLogger = require('./middlewares/auditLogger');
 
 // Preload all models used by the dedicated master process.
 [
-  './models/User', './models/Hospital', './models/License', './models/AuditLog',
+  './models/User', './models/Hospital', './models/Plan', './models/License', './models/SupportTicket', './models/PlatformRequest', './models/PlatformDelivery', './models/AuditLog',
   './models/AbdmFacility', './models/AbdmTransaction', './models/AbdmWebhookEvent',
   './models/AbdmConsent', './models/AbdmJob', './models/AbdmInternalRequest',
   './models/AbdmHiuRequest', './models/AbdmSubscription', './models/AbdmDataRelayToken',
@@ -41,6 +41,9 @@ app.get('/health', (_req, res) => res.json({
 const adminLimiter = rateLimit({ windowMs: 60000, max: Number(process.env.API_RATE_LIMIT_PER_MINUTE || 600), standardHeaders: true, legacyHeaders: false });
 app.use('/api/mediqliq', adminLimiter, auditLogger({ apiPrefix: '/api/mediqliq' }), require('./routes/mediqliqSuperAdmin.routes'));
 app.use('/api/abdm/master', adminLimiter, require('./routes/abdmMasterAdmin.routes'));
+
+// HMAC-authenticated hospital -> master SaaS control-plane APIs.
+app.use('/internal/platform', require('./routes/platformInternal.routes'));
 
 // HMAC-authenticated hospital -> master APIs for M1/M2/M3.
 app.use('/internal/abdm', require('./routes/abdmInternal.routes'));

@@ -19,6 +19,12 @@ async function generateUniqueHospitalId(HospitalModel) {
   throw new Error('Unable to generate unique hospital ID after multiple attempts');
 }
 
+const encryptedSecretSchema = new mongoose.Schema({
+  ciphertext: { type: String, select: false },
+  iv: { type: String, select: false },
+  tag: { type: String, select: false }
+}, { _id: false });
+
 const hospitalSchema = new mongoose.Schema(
   {
     hospitalID: { type: String, required: true, unique: true, trim: true, uppercase: true },
@@ -61,16 +67,39 @@ const hospitalSchema = new mongoose.Schema(
     },
 
     deployment: {
-      frontendUrl: String,
-      backendUrl: String,
-      databaseName: String,
+      // Vercel/static frontend URL is optional but stored centrally alongside the backend URL.
+      frontendUrl: { type: String, trim: true },
+      backendUrl: { type: String, trim: true },
+      databaseName: { type: String, trim: true },
       environment: { type: String, enum: ['development', 'sandbox', 'production'], default: 'production' },
       status: {
         type: String,
-        enum: ['PLANNED', 'PROVISIONING', 'READY', 'SUSPENDED'],
-        default: 'PLANNED'
+        enum: ['PLANNED', 'PROVISIONING', 'READY', 'PROVISIONING_FAILED', 'SUSPENDED'],
+        default: 'PLANNED',
+        index: true
       },
-      provisionedAt: Date
+      provisionedAt: Date,
+      provisioningId: { type: String, index: true, sparse: true },
+      provisioningVersion: { type: Number, default: 1 },
+      lastProvisionAttemptAt: Date,
+      lastProvisionSuccessAt: Date,
+      lastProvisionError: String,
+      remoteHospitalId: String,
+      remoteAdminId: String
+    },
+
+    platformConnector: {
+      keyId: { type: String, trim: true },
+      secretEncrypted: { type: encryptedSecretSchema, select: false },
+      status: {
+        type: String,
+        enum: ['NOT_CONFIGURED', 'PENDING', 'ACTIVE', 'DISABLED', 'UNREACHABLE'],
+        default: 'NOT_CONFIGURED',
+        index: true
+      },
+      lastHealthCheckAt: Date,
+      lastHealthCheckStatus: String,
+      lastHealthCheckError: String
     },
 
     onboarding: {
@@ -91,6 +120,15 @@ const hospitalSchema = new mongoose.Schema(
     },
 
     abdmFacility: { type: mongoose.Schema.Types.ObjectId, ref: 'AbdmFacility', sparse: true },
+
+    // Hospital administrators authenticate only against HIMS. Master stores contact/provisioning metadata.
+    primaryAdminContact: {
+      name: { type: String, trim: true },
+      email: { type: String, lowercase: true, trim: true },
+      phone: { type: String, trim: true }
+    },
+
+    // Deprecated compatibility reference. Do not create new hospital-admin Master users.
     primaryAdmin: { type: mongoose.Schema.Types.ObjectId, ref: 'User', sparse: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
   },

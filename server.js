@@ -6,6 +6,7 @@ const connectDB = require('./config/db');
 const config = require('./config/abdm.config');
 const app = require('./app');
 const { startAbdmJobWorker, stopAbdmJobWorker } = require('./jobs/abdmJobWorker');
+const { startPlatformDeliveryWorker, stopPlatformDeliveryWorker } = require('./jobs/platformDeliveryWorker');
 
 async function start() {
   await connectDB();
@@ -15,10 +16,12 @@ async function start() {
     console.log(`MediQliq ABDM Master listening on port ${port} (${config.environment})`);
   });
   startAbdmJobWorker();
+  startPlatformDeliveryWorker();
 
   async function shutdown(signal) {
     console.log(`${signal} received; shutting down`);
     stopAbdmJobWorker();
+    stopPlatformDeliveryWorker();
     server.close(async () => {
       await mongoose.connection.close(false);
       process.exit(0);

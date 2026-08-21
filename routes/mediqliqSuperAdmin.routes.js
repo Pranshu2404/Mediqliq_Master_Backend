@@ -5,6 +5,10 @@ const { protect, isMediQliqSuperAdmin } = require('../middlewares/masterAuth');
 const abdmConfig = require('../config/abdm.config');
 const abdmMasterController = require('../controllers/abdmMasterAdmin.controller');
 const mediqliqAbdmController = require('../controllers/mediqliqAbdmAdmin.controller');
+const hospitalController = require('../controllers/hospitalAdmin.controller');
+const licenseController = require('../controllers/licenseAdmin.controller');
+const planController = require('../controllers/planAdmin.controller');
+const supportController = require('../controllers/supportTicketAdmin.controller');
 
 const requireSuperAdmin = [protect, isMediQliqSuperAdmin];
 
@@ -72,21 +76,35 @@ router.post('/users', requireSuperAdmin, controller.createUser);
 router.patch('/users/:userId', requireSuperAdmin, controller.updateUser);
 router.delete('/users/:userId', requireSuperAdmin, controller.deleteUser);
 
-// Hospital management
-router.get('/hospitals', requireSuperAdmin, controller.listHospitals);
-router.post('/hospitals', requireSuperAdmin, controller.createHospital);
-router.get('/hospitals/:hospitalId', requireSuperAdmin, controller.getHospital);
-router.patch('/hospitals/:hospitalId', requireSuperAdmin, controller.updateHospital);
-router.delete('/hospitals/:hospitalId', requireSuperAdmin, controller.deleteHospital);
+// Hospital management / remote provisioning
+router.get('/hospitals', requireSuperAdmin, hospitalController.listHospitals);
+router.post('/hospitals', requireSuperAdmin, hospitalController.createHospital);
+router.get('/hospitals/:hospitalId', requireSuperAdmin, hospitalController.getHospital);
+router.patch('/hospitals/:hospitalId', requireSuperAdmin, hospitalController.updateHospital);
+router.post('/hospitals/:hospitalId/provision', requireSuperAdmin, hospitalController.provisionHospital);
+router.post('/hospitals/:hospitalId/platform-connector/rotate', requireSuperAdmin, hospitalController.rotatePlatformConnector);
+router.post('/hospitals/:hospitalId/platform-connector/check', requireSuperAdmin, hospitalController.checkPlatformConnector);
+router.delete('/hospitals/:hospitalId', requireSuperAdmin, hospitalController.deleteHospital);
+
+// Plan management
+router.get('/plans', requireSuperAdmin, planController.listPlans);
+router.post('/plans', requireSuperAdmin, planController.createPlan);
+router.get('/plans/:planId', requireSuperAdmin, planController.getPlan);
+router.patch('/plans/:planId', requireSuperAdmin, planController.updatePlan);
 
 // License management
-router.get('/licenses', requireSuperAdmin, controller.listLicenses);
-router.post('/licenses', requireSuperAdmin, controller.createLicense);
-router.get('/licenses/:licenseId', requireSuperAdmin, controller.getLicense);
-router.patch('/licenses/:licenseId', requireSuperAdmin, controller.updateLicense);
-router.delete('/licenses/:licenseId', requireSuperAdmin, controller.deleteLicense);
-router.patch('/licenses/:licenseId/reset-activations', requireSuperAdmin, controller.resetLicenseActivations);
-router.delete('/licenses/:licenseId/activations/:activationId', requireSuperAdmin, controller.removeLicenseActivation);
+router.get('/licenses', requireSuperAdmin, licenseController.listLicenses);
+router.post('/licenses', requireSuperAdmin, licenseController.createLicense);
+router.get('/licenses/:licenseId', requireSuperAdmin, licenseController.getLicense);
+router.patch('/licenses/:licenseId', requireSuperAdmin, licenseController.updateLicense);
+router.delete('/licenses/:licenseId', requireSuperAdmin, licenseController.deleteLicense);
+router.patch('/licenses/:licenseId/reset-activations', requireSuperAdmin, licenseController.resetLicenseActivations);
+router.delete('/licenses/:licenseId/activations/:activationId', requireSuperAdmin, licenseController.removeLicenseActivation);
+
+// Central support ticket management
+router.get('/support-tickets', requireSuperAdmin, supportController.listTickets);
+router.get('/support-tickets/:ticketId', requireSuperAdmin, supportController.getTicket);
+router.patch('/support-tickets/:ticketId', requireSuperAdmin, supportController.updateTicket);
 
 // Audit logs
 router.get('/audit-logs', requireSuperAdmin, controller.listAuditLogs);
