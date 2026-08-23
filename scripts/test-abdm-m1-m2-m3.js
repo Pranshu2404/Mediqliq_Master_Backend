@@ -1,7 +1,9 @@
 const crypto = require('crypto');
 
-const FHIR_TOKEN = 'OASSD1bDrjrc3xkBaGPcJnm_LZgf1QGpt9H8ntzMxxhKqbgOx6mr6ORKcMOxAeYI';
-const CRYPTO_TOKEN = '5BpsLigkp4f6Fx4XtFW1hJBWEYBYrlkF_QbkmBU7Ei7SR4S7r_BLnf7j2iAB2XsW';
+const { maskAbhaNumber, maskAbhaAddress } = require('../utils/sensitiveData');
+const FHIR_TOKEN = process.env.ABDM_FHIR_VALIDATOR_TOKEN || '';
+const CRYPTO_TOKEN = process.env.ABDM_CRYPTO_ADAPTER_TOKEN || '';
+if (!FHIR_TOKEN || !CRYPTO_TOKEN) throw new Error('ABDM_FHIR_VALIDATOR_TOKEN and ABDM_CRYPTO_ADAPTER_TOKEN are required for this test');
 const FHIR_URL = 'http://127.0.0.1:3500';
 const CRYPTO_URL = 'http://127.0.0.1:8090';
 const CONSENT_URL = 'http://127.0.0.1:8180';
@@ -55,7 +57,7 @@ async function runTests() {
   console.log('----------------------------------------------------------------');
   const patientAbha = '91-1234-5678-9012';
   const abhaAddress = 'patient123@abdm';
-  console.log(`  Step 1: Patient Discovery for ABHA: ${patientAbha} (${abhaAddress})`);
+  console.log(`  Step 1: Patient Discovery for ABHA: ${maskAbhaNumber(patientAbha)} (${maskAbhaAddress(abhaAddress)})`);
   const discoveryResponse = {
     patient: {
       referenceNumber: 'PAT-98765',

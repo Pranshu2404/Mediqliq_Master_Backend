@@ -2,6 +2,7 @@ const SupportTicket = require('../models/SupportTicket');
 const User = require('../models/User');
 const sendEmail = require('../utils/sendEmail');
 const { currentLicenseForHospital, buildLicensePayload } = require('../services/licenseControl.service');
+const { sanitizeFreeText } = require('../utils/sensitiveData');
 
 function clean(value, max = 5000) {
   return String(value || '').trim().slice(0, max);
@@ -41,8 +42,18 @@ exports.submitSupportTicket = async (req, res) => {
       if (existing) return res.status(200).json({ success: true, ticketRef: existing.ticketRef, status: existing.status, idempotent: true });
     }
 
-    const subject = clean(req.body.subject, 180);
-    const message = clean(req.body.message, 8000);
+    const subjectDlp = sanitizeFreeText(clean(req.body.subject, 180), { mode: 'support', max: 180 });
+    const messageDlp = sanitizeFreeText(clean(req.body.message, 8000), { mode: 'support', max: 8000 });
+    if (subjectDlp.rejected || messageDlp.rejected) {
+      return res.status(400).json({
+        success: false,
+        code: 'SUPPORT_SENSITIVE_SECRET_REJECTED',
+        error: 'Support tickets must not contain OTPs, passwords, access tokens or API secrets.',
+        findings: Array.from(new Set([...(subjectDlp.rejectFindings || []), ...(messageDlp.rejectFindings || [])]))
+      });
+    }
+    const subject = subjectDlp.value;
+    const message = messageDlp.value;
     if (!subject || !message) return res.status(400).json({ success: false, error: 'subject and message are required' });
 
     const ticketRef = await nextTicketRef(req.platformHospital.tenantCode);
@@ -61,6 +72,8 @@ exports.submitSupportTicket = async (req, res) => {
       priority: priority(req.body.priority),
       subject,
       message,
+      dlpFindings: Array.from(new Set([...(subjectDlp.findings || []), ...(messageDlp.findings || [])])),
+      dlpSanitizedAt: new Date(),
       activity: [{ type: 'CREATED', message: 'Ticket created from hospital HIMS', changedBy: { source: 'HOSPITAL' } }]
     });
 

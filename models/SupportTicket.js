@@ -14,6 +14,9 @@ const activitySchema = new mongoose.Schema({
 
 const noteSchema = new mongoose.Schema({
   message: { type: String, required: true, trim: true },
+  // Records which categories were redacted before storage/email; never stores the raw sensitive value.
+  dlpFindings: { type: [String], default: [] },
+  dlpSanitizedAt: Date,
   author: {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     name: String,
@@ -37,6 +40,9 @@ const supportTicketSchema = new mongoose.Schema({
   priority: { type: String, enum: ['LOW', 'NORMAL', 'HIGH', 'URGENT'], default: 'NORMAL', index: true },
   subject: { type: String, required: true, trim: true },
   message: { type: String, required: true, trim: true },
+  // Records which categories were redacted before storage/email; never stores the raw sensitive value.
+  dlpFindings: { type: [String], default: [] },
+  dlpSanitizedAt: Date,
   status: {
     type: String,
     enum: ['OPEN', 'IN_PROGRESS', 'WAITING_ON_HOSPITAL', 'RESOLVED', 'CLOSED'],

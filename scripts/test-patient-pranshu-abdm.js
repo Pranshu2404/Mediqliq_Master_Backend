@@ -1,41 +1,33 @@
 const crypto = require('crypto');
 
-// Service configurations and tokens
-const FHIR_TOKEN = 'OASSD1bDrjrc3xkBaGPcJnm_LZgf1QGpt9H8ntzMxxhKqbgOx6mr6ORKcMOxAeYI';
-const CRYPTO_TOKEN = '5BpsLigkp4f6Fx4XtFW1hJBWEYBYrlkF_QbkmBU7Ei7SR4S7r_BLnf7j2iAB2XsW';
-const FHIR_URL = 'http://127.0.0.1:3500';
-const CRYPTO_URL = 'http://127.0.0.1:8090';
-const CONSENT_URL = 'http://127.0.0.1:8180';
+// Service configuration is intentionally loaded from the environment. Never commit
+// live patient identifiers, ABHA numbers, phone numbers, or service tokens to source control.
+const { maskAbhaNumber, maskAbhaAddress } = require('../utils/sensitiveData');
+const FHIR_TOKEN = process.env.ABDM_FHIR_VALIDATOR_TOKEN || '';
+const CRYPTO_TOKEN = process.env.ABDM_CRYPTO_ADAPTER_TOKEN || '';
+const FHIR_URL = process.env.ABDM_FHIR_VALIDATOR_URL || 'http://127.0.0.1:3500';
+const CRYPTO_URL = process.env.ABDM_CRYPTO_ADAPTER_URL || 'http://127.0.0.1:8090';
+const CONSENT_URL = process.env.ABDM_CONSENT_VALIDATOR_URL || 'http://127.0.0.1:8180';
 
-// Real Patient Data from Hospital DB
+const required = (name) => { const value = process.env[name]; if (!value) throw new Error(`${name} is required`); return value; };
 const PATIENT = {
-  dbId: '6a5cc7956b8737f24a2f2de4',
-  uhid: 'AZ4967-SPAG7777-2607',
-  patientReference: 'PAT_YMEl_JnfVAZyf1POIYEPH2m6',
-  firstName: 'Pranshu',
-  lastName: 'Pandey',
-  fullName: 'Pranshu Pandey',
-  salutation: 'Mr.',
-  gender: 'male',
-  dob: '2004-04-24',
-  phone: '7459963373',
-  email: 'patient@gmail.com',
-  bloodGroup: 'A+',
-  patientType: 'ipd',
-  abhaNumber: '91-7257-4615-6027',
-  abhaAddress: '91725746156027@sbx',
-  hospitalId: '69a697c0df37f940dd7906ce',
+  dbId: required('ABDM_TEST_PATIENT_DB_ID'),
+  uhid: required('ABDM_TEST_PATIENT_UHID'),
+  patientReference: required('ABDM_TEST_PATIENT_REFERENCE'),
+  fullName: process.env.ABDM_TEST_PATIENT_DISPLAY_NAME || 'Test Patient',
+  salutation: '',
+  gender: process.env.ABDM_TEST_PATIENT_GENDER || 'unknown',
+  dob: process.env.ABDM_TEST_PATIENT_DOB || '',
+  phone: required('ABDM_TEST_PATIENT_PHONE'),
+  abhaNumber: required('ABDM_TEST_PATIENT_ABHA_NUMBER'),
+  abhaAddress: required('ABDM_TEST_PATIENT_ABHA_ADDRESS'),
+  hospitalId: required('ABDM_TEST_HOSPITAL_ID'),
   activeAdmission: {
-    admissionId: '6a5ce1d68e67abfe0e3db952',
-    registrationNumber: 'IPD-20260719-0004',
-    shipNumber: 'SHIP-20260719-2f2de4'
-  },
-  address: {
-    district: 'KANPUR NAGAR',
-    state: 'UTTAR PRADESH',
-    pinCode: '208011'
+    registrationNumber: required('ABDM_TEST_ADMISSION_NUMBER'),
+    shipNumber: process.env.ABDM_TEST_ENCOUNTER_REFERENCE || required('ABDM_TEST_ADMISSION_NUMBER')
   }
 };
+if (!FHIR_TOKEN || !CRYPTO_TOKEN) throw new Error('ABDM_FHIR_VALIDATOR_TOKEN and ABDM_CRYPTO_ADAPTER_TOKEN are required');
 
 function getHeaders(token) {
   return {
@@ -72,8 +64,8 @@ async function post(url, body, token = CRYPTO_TOKEN, retries = 3) {
 async function runPatientAbdmTest() {
   console.log('================================================================');
   console.log('🏥 ABDM LIVE M1-M2-M3 TEST FOR REAL PATIENT RECORD:');
-  console.log(`   Patient: ${PATIENT.salutation} ${PATIENT.fullName} | UHID: ${PATIENT.uhid}`);
-  console.log(`   ABHA No: ${PATIENT.abhaNumber} | ABHA Address: ${PATIENT.abhaAddress}`);
+  console.log(`   Patient: ${PATIENT.fullName} | UHID suffix: ...${String(PATIENT.uhid).slice(-4)}`);
+  console.log(`   ABHA No: ${maskAbhaNumber(PATIENT.abhaNumber)} | ABHA Address: ${maskAbhaAddress(PATIENT.abhaAddress)}`);
   console.log(`   Admission No: ${PATIENT.activeAdmission.registrationNumber} (IPD)`);
   console.log('================================================================\n');
 
@@ -96,7 +88,7 @@ async function runPatientAbdmTest() {
   console.log('📌 [MILESTONE M1] Discovery & Care Context Linking for Pranshu Pandey');
   console.log('----------------------------------------------------------------');
   console.log(`  Incoming Discovery Request from Gateway:`);
-  console.log(`  Matching on ABHA Address: ${PATIENT.abhaAddress} & Phone: ${PATIENT.phone}`);
+  console.log(`  Matching on ABHA Address: ${maskAbhaAddress(PATIENT.abhaAddress)} & Phone: ******${PATIENT.phone.slice(-4)}`);
 
   // Simulating Discovery response from Hospital ERP
   const discoveryResponse = {
@@ -386,7 +378,7 @@ async function runPatientAbdmTest() {
   console.log('\n  📋 Decrypted Clinical Data Confirmation:');
   console.log(`     • Resource Type       : ${decryptedJson.resourceType}`);
   console.log(`     • Patient Name        : ${decryptedJson.entry[1].resource.name[0].text}`);
-  console.log(`     • ABHA Number         : ${decryptedJson.entry[1].resource.identifier[1].value}`);
+  console.log(`     • ABHA Number         : ${maskAbhaNumber(decryptedJson.entry[1].resource.identifier[1].value)}`);
   console.log(`     • Hospital UHID       : ${decryptedJson.entry[1].resource.identifier[0].value}`);
   console.log(`     • District / State    : ${decryptedJson.entry[1].resource.address[0].district}, ${decryptedJson.entry[1].resource.address[0].state}`);
   console.log(`     • Prescribed Medicine : ${decryptedJson.entry[3].resource.medicationCodeableConcept.text}`);

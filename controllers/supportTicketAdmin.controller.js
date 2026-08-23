@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const SupportTicket = require('../models/SupportTicket');
+const { sanitizeFreeText } = require('../utils/sensitiveData');
 
 function validId(value) { return mongoose.Types.ObjectId.isValid(value); }
 function escapeRegex(value = '') { return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
@@ -43,8 +44,19 @@ exports.updateTicket = async (req, res) => {
   if (req.body.status !== undefined) ticket.status = req.body.status;
   if (req.body.assignedTo !== undefined) ticket.assignedTo = req.body.assignedTo || undefined;
   if (req.body.internalNote) {
+    const noteDlp = sanitizeFreeText(String(req.body.internalNote).trim().slice(0, 5000), { mode: 'support', max: 5000 });
+    if (noteDlp.rejected) {
+      return res.status(400).json({
+        success: false,
+        code: 'SUPPORT_SENSITIVE_SECRET_REJECTED',
+        message: 'Internal notes must not contain OTPs, passwords, access tokens or API secrets.',
+        findings: noteDlp.rejectFindings
+      });
+    }
     ticket.internalNotes.push({
-      message: String(req.body.internalNote).trim().slice(0, 5000),
+      message: noteDlp.value,
+      dlpFindings: noteDlp.findings,
+      dlpSanitizedAt: new Date(),
       author: { userId: req.user._id, name: req.user.name, email: req.user.email }
     });
   }
