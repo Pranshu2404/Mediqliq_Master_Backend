@@ -47,7 +47,9 @@ async function verifyPlatformInbound(req, res, next) {
     const hospital = await Hospital.findOne({ tenantCode: String(h.tenantCode).trim().toUpperCase() })
       .select('+platformConnector.secretEncrypted +platformConnector.secretEncrypted.ciphertext +platformConnector.secretEncrypted.iv +platformConnector.secretEncrypted.tag');
 
-    if (!hospital || !['PENDING', 'ACTIVE'].includes(hospital.platformConnector?.status) || hospital.platformConnector?.keyId !== h.keyId) {
+    // UNREACHABLE is accepted only for backward compatibility with records
+    // created before reachability was split from connector lifecycle state.
+    if (!hospital || !['PENDING', 'ACTIVE', 'UNREACHABLE'].includes(hospital.platformConnector?.status) || hospital.platformConnector?.keyId !== h.keyId) {
       return res.status(401).json({ success: false, error: 'Unknown or inactive platform connector' });
     }
 
@@ -67,7 +69,10 @@ async function verifyPlatformInbound(req, res, next) {
       return res.status(409).json({ success: false, error: 'Duplicate platform request rejected' });
     }
 
-    if (hospital.platformConnector.status === 'PENDING') {
+    if (['PENDING', 'UNREACHABLE'].includes(hospital.platformConnector.status)) {
+      if (hospital.platformConnector.status === 'UNREACHABLE') {
+        hospital.platformConnector.healthStatus = 'UNREACHABLE';
+      }
       hospital.platformConnector.status = 'ACTIVE';
       await hospital.save().catch(() => {});
     }

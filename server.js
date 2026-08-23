@@ -7,6 +7,7 @@ const config = require('./config/abdm.config');
 const app = require('./app');
 const { startAbdmJobWorker, stopAbdmJobWorker } = require('./jobs/abdmJobWorker');
 const { startPlatformDeliveryWorker, stopPlatformDeliveryWorker } = require('./jobs/platformDeliveryWorker');
+const { platformConnectorHostPolicySummary } = require('./services/platformConnector.service');
 
 async function start() {
   await connectDB();
@@ -14,6 +15,7 @@ async function start() {
   const server = http.createServer(app);
   server.listen(port, () => {
     console.log(`MediQliq ABDM Master listening on port ${port} (${config.environment})`);
+    console.log(platformConnectorHostPolicySummary());
   });
   startAbdmJobWorker();
   startPlatformDeliveryWorker();

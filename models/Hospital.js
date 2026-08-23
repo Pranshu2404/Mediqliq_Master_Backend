@@ -81,8 +81,11 @@ const hospitalSchema = new mongoose.Schema(
       provisionedAt: Date,
       provisioningId: { type: String, index: true, sparse: true },
       provisioningVersion: { type: Number, default: 1 },
+      lastProvisionRequestedAt: Date,
       lastProvisionAttemptAt: Date,
       lastProvisionSuccessAt: Date,
+      lastProvisionErrorAt: Date,
+      lastProvisionErrorCode: String,
       lastProvisionError: String,
       remoteHospitalId: String,
       remoteAdminId: String
@@ -93,8 +96,14 @@ const hospitalSchema = new mongoose.Schema(
       secretEncrypted: { type: encryptedSecretSchema, select: false },
       status: {
         type: String,
-        enum: ['NOT_CONFIGURED', 'PENDING', 'ACTIVE', 'DISABLED', 'UNREACHABLE'],
+        enum: ['NOT_CONFIGURED', 'PENDING', 'ACTIVE', 'DISABLED'],
         default: 'NOT_CONFIGURED',
+        index: true
+      },
+      healthStatus: {
+        type: String,
+        enum: ['UNKNOWN', 'OK', 'UNREACHABLE'],
+        default: 'UNKNOWN',
         index: true
       },
       lastHealthCheckAt: Date,
@@ -137,6 +146,12 @@ const hospitalSchema = new mongoose.Schema(
 
 hospitalSchema.pre('validate', async function assignIdentifiers(next) {
   try {
+    // Legacy releases stored reachability as lifecycle status. Normalize those
+    // records on their next save while preserving the failed health signal.
+    if (this.platformConnector?.status === 'UNREACHABLE') {
+      this.platformConnector.status = 'PENDING';
+      this.platformConnector.healthStatus = 'UNREACHABLE';
+    }
     if (this.isNew && !this.hospitalID) this.hospitalID = await generateUniqueHospitalId(this.constructor);
     if (!this.tenantCode && this.hospitalID) this.tenantCode = this.hospitalID;
     next();

@@ -56,6 +56,10 @@ function configurePlatformConnector(hospital, input = {}) {
     hospital.platformConnector.keyId = keyId || `platform-${String(hospital.tenantCode || hospital.hospitalID).toLowerCase()}`;
     hospital.platformConnector.secretEncrypted = encryptSecret(secret);
     hospital.platformConnector.status = 'PENDING';
+    hospital.platformConnector.healthStatus = 'UNKNOWN';
+    hospital.platformConnector.lastHealthCheckAt = undefined;
+    hospital.platformConnector.lastHealthCheckStatus = undefined;
+    hospital.platformConnector.lastHealthCheckError = undefined;
   } else if (keyId) {
     hospital.platformConnector.keyId = keyId;
   }
@@ -85,23 +89,62 @@ async function ensureLicense({ hospital, commercial, actorId }) {
   return License.create(data);
 }
 
+async function markProvisionFailure(hospital, reason, message, status = 'PLANNED') {
+  hospital.deployment.status = status;
+  hospital.deployment.lastProvisionError = message;
+  hospital.deployment.lastProvisionErrorCode = reason;
+  hospital.deployment.lastProvisionErrorAt = new Date();
+  await hospital.save();
+  return { attempted: false, reason, error: message };
+}
+
 async function provisionHospital(hospital, license, administrator, options = {}) {
+  hospital.deployment.lastProvisionRequestedAt = new Date();
+
   if (!hospital.deployment?.backendUrl) {
-    hospital.deployment.status = 'PLANNED';
-    await hospital.save();
-    return { attempted: false, reason: 'BACKEND_URL_MISSING' };
+    return markProvisionFailure(
+      hospital,
+      'BACKEND_URL_MISSING',
+      'Hospital backend URL is not configured'
+    );
   }
-  if (!hospital.platformConnector?.keyId || !['PENDING', 'ACTIVE'].includes(hospital.platformConnector?.status)) {
-    hospital.deployment.status = 'PLANNED';
-    hospital.deployment.lastProvisionError = 'Platform connector credentials are not configured';
-    await hospital.save();
-    return { attempted: false, reason: 'PLATFORM_CONNECTOR_MISSING' };
+
+  const connectorStatus = hospital.platformConnector?.status || 'NOT_CONFIGURED';
+  const connectorHealth = hospital.platformConnector?.healthStatus || 'UNKNOWN';
+  if (!hospital.platformConnector?.keyId || connectorStatus === 'NOT_CONFIGURED') {
+    return markProvisionFailure(
+      hospital,
+      'PLATFORM_CONNECTOR_MISSING',
+      'Platform connector credentials are not configured'
+    );
+  }
+  if (connectorStatus === 'DISABLED') {
+    return markProvisionFailure(
+      hospital,
+      'PLATFORM_CONNECTOR_DISABLED',
+      'Platform connector is disabled'
+    );
+  }
+  if (connectorStatus === 'UNREACHABLE' || connectorHealth === 'UNREACHABLE') {
+    return markProvisionFailure(
+      hospital,
+      'PLATFORM_CONNECTOR_UNREACHABLE',
+      'Hospital backend is currently unreachable. Run connector health check and retry.'
+    );
+  }
+  if (!['PENDING', 'ACTIVE'].includes(connectorStatus)) {
+    return markProvisionFailure(
+      hospital,
+      'PLATFORM_CONNECTOR_NOT_READY',
+      `Platform connector is ${connectorStatus}. Run connector health check before provisioning.`
+    );
   }
   if (!administrator?.name || !administrator?.email || !administrator?.password) {
-    hospital.deployment.status = 'PLANNED';
-    hospital.deployment.lastProvisionError = 'Administrator name/email/password are required for provisioning';
-    await hospital.save();
-    return { attempted: false, reason: 'ADMIN_CREDENTIALS_MISSING' };
+    return markProvisionFailure(
+      hospital,
+      'ADMIN_CREDENTIALS_MISSING',
+      'Administrator name/email/password are required for provisioning'
+    );
   }
 
   hospital.deployment.status = 'PROVISIONING';
@@ -109,6 +152,8 @@ async function provisionHospital(hospital, license, administrator, options = {})
   hospital.deployment.provisioningVersion = Number(options.version || hospital.deployment.provisioningVersion || 1);
   hospital.deployment.lastProvisionAttemptAt = new Date();
   hospital.deployment.lastProvisionError = undefined;
+  hospital.deployment.lastProvisionErrorCode = undefined;
+  hospital.deployment.lastProvisionErrorAt = undefined;
   await hospital.save();
 
   try {
@@ -158,16 +203,27 @@ async function provisionHospital(hospital, license, administrator, options = {})
     hospital.deployment.provisionedAt = new Date();
     hospital.deployment.lastProvisionSuccessAt = new Date();
     hospital.deployment.lastProvisionError = undefined;
+    hospital.deployment.lastProvisionErrorCode = undefined;
+    hospital.deployment.lastProvisionErrorAt = undefined;
     hospital.deployment.remoteHospitalId = result.hospitalId || result.data?.hospitalId;
     hospital.deployment.remoteAdminId = result.adminId || result.data?.adminId;
+    hospital.platformConnector.status = 'ACTIVE';
+    hospital.platformConnector.healthStatus = 'OK';
     hospital.onboarding.status = 'ADMIN_PROVISIONED';
     await hospital.save();
     return { attempted: true, success: true, result };
   } catch (error) {
     hospital.deployment.status = 'PROVISIONING_FAILED';
     hospital.deployment.lastProvisionError = String(error.message || error).slice(0, 2000);
+    hospital.deployment.lastProvisionErrorCode = String(error.code || 'REMOTE_PROVISION_FAILED').slice(0, 200);
+    hospital.deployment.lastProvisionErrorAt = new Date();
     await hospital.save();
-    return { attempted: true, success: false, error: hospital.deployment.lastProvisionError };
+    return {
+      attempted: true,
+      success: false,
+      error: hospital.deployment.lastProvisionError,
+      code: hospital.deployment.lastProvisionErrorCode
+    };
   }
 }
 
@@ -296,6 +352,10 @@ exports.rotatePlatformConnector = async (req, res) => {
   hospital.platformConnector.keyId = keyId;
   hospital.platformConnector.secretEncrypted = encryptSecret(secret);
   hospital.platformConnector.status = 'PENDING';
+  hospital.platformConnector.healthStatus = 'UNKNOWN';
+  hospital.platformConnector.lastHealthCheckAt = undefined;
+  hospital.platformConnector.lastHealthCheckStatus = undefined;
+  hospital.platformConnector.lastHealthCheckError = undefined;
   await hospital.save();
   res.json({
     success: true,
@@ -308,16 +368,33 @@ exports.checkPlatformConnector = async (req, res) => {
   if (!validId(req.params.hospitalId)) return res.status(400).json({ success: false, message: 'Invalid hospital id' });
   const hospital = await Hospital.findById(req.params.hospitalId);
   if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+  if (!hospital.platformConnector?.keyId || hospital.platformConnector?.status === 'NOT_CONFIGURED') {
+    return res.status(409).json({ success: false, message: 'Platform connector credentials are not configured' });
+  }
+  if (hospital.platformConnector?.status === 'DISABLED') {
+    return res.status(409).json({ success: false, message: 'Platform connector is disabled' });
+  }
   try {
-    const result = await forwardToHospital(hospital._id, '/internal/platform/health', undefined, { method: 'GET' });
+    const result = await forwardToHospital(hospital._id, '/internal/platform/health', undefined, {
+      method: 'GET',
+      // Legacy UNREACHABLE lifecycle values must be retryable so a transient
+      // network/allow-list failure can recover without manual DB edits.
+      allowedStatuses: ['PENDING', 'ACTIVE', 'UNREACHABLE']
+    });
     hospital.platformConnector.status = 'ACTIVE';
+    hospital.platformConnector.healthStatus = 'OK';
     hospital.platformConnector.lastHealthCheckAt = new Date();
     hospital.platformConnector.lastHealthCheckStatus = 'OK';
     hospital.platformConnector.lastHealthCheckError = undefined;
     await hospital.save();
     res.json({ success: true, result });
   } catch (error) {
-    hospital.platformConnector.status = 'UNREACHABLE';
+    // Reachability is health state, not connector credential/lifecycle state.
+    // Normalize legacy UNREACHABLE records to PENDING while preserving health.
+    if (hospital.platformConnector.status === 'UNREACHABLE') {
+      hospital.platformConnector.status = 'PENDING';
+    }
+    hospital.platformConnector.healthStatus = 'UNREACHABLE';
     hospital.platformConnector.lastHealthCheckAt = new Date();
     hospital.platformConnector.lastHealthCheckStatus = 'FAILED';
     hospital.platformConnector.lastHealthCheckError = error.message;

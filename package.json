@@ -16,7 +16,8 @@
     "consent-validator:test": "node --test apps/consent-validator/tests/*.test.js",
     "consent-validator:start": "node apps/consent-validator/server.js",
     "plans:seed": "node scripts/seed-default-plans.js",
-    "migrate:full-access-hospital": "node scripts/migrate-existing-hospital-full-access.js"
+    "migrate:full-access-hospital": "node scripts/migrate-existing-hospital-full-access.js",
+    "migrate:platform-connector-health-state": "node scripts/migrate-platform-connector-health-state.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -11,6 +11,10 @@ function canonicalJson(value) {
 function canonicalJsonValue(value) {
   if (value === undefined) return undefined;
   if (value === null) return 'null';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new TypeError('Cannot canonicalize an invalid Date');
+    return JSON.stringify(value.toISOString());
+  }
   if (Array.isArray(value)) return `[${value.map((item) => item === undefined ? 'null' : canonicalJsonValue(item)).join(',')}]`;
   if (typeof value === 'object') {
     const keys = Object.keys(value).filter(k => value[k] !== undefined).sort();

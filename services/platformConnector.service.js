@@ -9,11 +9,26 @@ const fetchFn = (...args) => {
   return import('node-fetch').then(({ default: fetchImpl }) => fetchImpl(...args));
 };
 
+function envTrue(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
 function allowedHosts() {
-  return String(process.env.PLATFORM_CONNECTOR_ALLOWED_HOSTS || '')
+  if (envTrue(process.env.PLATFORM_CONNECTOR_ALLOW_ANY_PUBLIC_HOST)) return [];
+  const raw = String(process.env.PLATFORM_CONNECTOR_ALLOWED_HOSTS || '').trim();
+  // Some hosting dashboards persist a visually empty value as literal quotes.
+  if (!raw || raw === '""' || raw === "''") return [];
+  return raw
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function platformConnectorHostPolicySummary() {
+  const configuredHosts = allowedHosts();
+  return configuredHosts.length
+    ? `Platform connector host policy: ${configuredHosts.length} configured host pattern(s)`
+    : 'Platform connector host policy: ANY PUBLIC HTTP(S) HOST (HTTPS enforced in production)';
 }
 
 async function loadHospitalWithSecret(hospitalId) {
@@ -27,7 +42,9 @@ async function forwardToHospital(hospitalOrId, path, body, options = {}) {
   const hospital = await loadHospitalWithSecret(hospitalId);
   if (!hospital) throw new Error('Hospital not found');
   if (!hospital.deployment?.backendUrl) throw new Error('Hospital backend URL is not configured');
-  if (!['PENDING', 'ACTIVE'].includes(hospital.platformConnector?.status)) {
+
+  const allowedStatuses = options.allowedStatuses || ['PENDING', 'ACTIVE'];
+  if (!allowedStatuses.includes(hospital.platformConnector?.status)) {
     throw new Error(`Platform connector is ${hospital.platformConnector?.status || 'not configured'}`);
   }
   if (!hospital.platformConnector?.keyId || !hospital.platformConnector?.secretEncrypted) {
@@ -73,19 +90,27 @@ async function forwardToHospital(hospitalOrId, path, body, options = {}) {
   if (!response.ok) {
     const error = new Error(data?.message || data?.error || `Hospital platform connector failed: ${response.status}`);
     error.statusCode = response.status;
+    error.code = data?.code;
     error.details = data;
     throw error;
   }
 
-  if (hospital.platformConnector.status === 'PENDING') {
+  // A successful signed exchange proves connector credentials are usable. It can
+  // activate PENDING connectors and also recover legacy UNREACHABLE lifecycle values.
+  if (['PENDING', 'UNREACHABLE'].includes(hospital.platformConnector.status)) {
+    if (hospital.platformConnector.status === 'UNREACHABLE') {
+      hospital.platformConnector.healthStatus = 'UNREACHABLE';
+    }
     hospital.platformConnector.status = 'ACTIVE';
-    hospital.platformConnector.lastHealthCheckAt = new Date();
-    hospital.platformConnector.lastHealthCheckStatus = 'OK';
-    hospital.platformConnector.lastHealthCheckError = undefined;
     await hospital.save().catch(() => {});
   }
 
   return data;
 }
 
-module.exports = { forwardToHospital, loadHospitalWithSecret };
+module.exports = {
+  forwardToHospital,
+  loadHospitalWithSecret,
+  allowedHosts,
+  platformConnectorHostPolicySummary
+};
