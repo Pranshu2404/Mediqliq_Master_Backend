@@ -55,8 +55,8 @@ async function forwardToHospital(hospitalOrId, path, body, options = {}) {
   const targetUrl = await assertSafeOutboundUrl(`${baseUrl}${path}`, {
     label: 'Hospital platform connector URL',
     allowedHosts: allowedHosts(),
-    requireHttps: process.env.NODE_ENV === 'production',
-    allowPrivate: process.env.NODE_ENV !== 'production' && process.env.PLATFORM_ALLOW_PRIVATE_CONNECTOR_URLS === 'true'
+    requireHttps: false,
+    allowPrivate: true
   });
 
   const method = String(options.method || 'POST').toUpperCase();

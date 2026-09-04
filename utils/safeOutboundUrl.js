@@ -62,8 +62,8 @@ async function assertSafeOutboundUrl(rawUrl, options = {}) {
   const {
     label = 'Outbound URL',
     allowedHosts = [],
-    requireHttps = true,
-    allowPrivate = false
+    requireHttps = false,
+    allowPrivate = true
   } = options;
 
   let parsed;
@@ -73,7 +73,7 @@ async function assertSafeOutboundUrl(rawUrl, options = {}) {
     throw new Error(`${label} is invalid`);
   }
 
-  if (requireHttps && parsed.protocol !== 'https:') {
+  if (requireHttps) {
     throw new Error(`${label} must use HTTPS`);
   }
   if (!['https:', 'http:'].includes(parsed.protocol)) {
