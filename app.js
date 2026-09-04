@@ -44,6 +44,8 @@ app.use('/api/abdm/master', adminLimiter, require('./routes/abdmMasterAdmin.rout
 
 // HMAC-authenticated hospital -> master SaaS control-plane APIs.
 app.use('/internal/platform', require('./routes/platformInternal.routes'));
+const enrollmentLimiter = rateLimit({ windowMs: 60000, max: Number(process.env.ELECTRON_ENROLLMENT_RATE_LIMIT_PER_MINUTE || 30), standardHeaders: true, legacyHeaders: false });
+app.use('/api/electron-enrollment', enrollmentLimiter, require('./routes/electronEnrollment.routes'));
 
 // HMAC-authenticated hospital -> master APIs for M1/M2/M3.
 app.use('/internal/abdm', require('./routes/abdmInternal.routes'));

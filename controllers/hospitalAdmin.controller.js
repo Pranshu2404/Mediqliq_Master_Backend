@@ -266,7 +266,8 @@ exports.createHospital = async (req, res) => {
     if (!data.tenantCode) data.tenantCode = data.hospitalID;
     data.createdBy = req.user._id;
     data.primaryAdminContact = contact;
-    data.deployment = { ...(data.deployment || {}), status: 'PLANNED' };
+    data.deployment = { ...(data.deployment || {}), status: data.deployment?.type === 'LOCAL_ELECTRON' ? 'AWAITING_ENROLLMENT' : 'PLANNED' };
+    if (data.deployment.type === 'LOCAL_ELECTRON') { data.deployment.frontendUrl = ''; data.deployment.backendUrl = ''; }
     data.onboarding = { ...(data.onboarding || {}), status: 'CREATED', abdmChoice: data.onboarding?.abdmChoice || 'CONFIGURE_LATER' };
 
     hospital = new Hospital(data);
@@ -279,7 +280,9 @@ exports.createHospital = async (req, res) => {
       ...contact,
       password: req.body.administrator?.password || req.body.adminPassword
     };
-    const provisioning = await provisionHospital(hospital, license, administrator);
+    const provisioning = hospital.deployment?.type === 'LOCAL_ELECTRON'
+      ? { attempted: false, reason: 'AWAITING_ELECTRON_ENROLLMENT', message: 'Create an enrollment code and activate this installation from the Electron app.' }
+      : await provisionHospital(hospital, license, administrator);
 
     req.auditResource = { type: 'Hospital', id: String(hospital._id) };
     res.status(201).json({
@@ -287,7 +290,7 @@ exports.createHospital = async (req, res) => {
       hospital,
       license,
       provisioning,
-      message: provisioning.success ? 'Hospital created and provisioned' : 'Hospital created; provisioning remains pending or failed'
+      message: provisioning.success ? 'Hospital created and provisioned' : (hospital.deployment?.type === 'LOCAL_ELECTRON' ? 'Hospital created; awaiting Electron enrollment' : 'Hospital created; provisioning remains pending or failed')
     });
   } catch (error) {
     if (license?._id) await License.findByIdAndDelete(license._id).catch(() => {});
@@ -315,6 +318,15 @@ exports.updateHospital = async (req, res) => {
     if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
     const data = pick(req.body, hospitalFields);
     Object.assign(hospital, data);
+    if (data.deployment?.type === 'LOCAL_ELECTRON') {
+      hospital.deployment.type = 'LOCAL_ELECTRON';
+      hospital.deployment.frontendUrl = '';
+      hospital.deployment.backendUrl = '';
+      if (hospital.deployment.status !== 'READY') hospital.deployment.status = 'AWAITING_ENROLLMENT';
+      hospital.deployment.lastProvisionError = undefined;
+      hospital.deployment.lastProvisionErrorCode = undefined;
+      hospital.deployment.lastProvisionErrorAt = undefined;
+    }
     if (req.body.primaryAdminContact) hospital.primaryAdminContact = req.body.primaryAdminContact;
     const contact = adminContact(req.body);
     if (contact.name || contact.email || contact.phone) hospital.primaryAdminContact = { ...(hospital.primaryAdminContact?.toObject?.() || hospital.primaryAdminContact || {}), ...Object.fromEntries(Object.entries(contact).filter(([, value]) => value)) };
@@ -331,6 +343,7 @@ exports.provisionHospital = async (req, res) => {
   if (!validId(req.params.hospitalId)) return res.status(400).json({ success: false, message: 'Invalid hospital id' });
   const hospital = await Hospital.findById(req.params.hospitalId);
   if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+  if (hospital.deployment?.type === 'LOCAL_ELECTRON') return res.status(409).json({ success: false, message: 'LOCAL_ELECTRON hospitals provision by redeeming an enrollment code from the desktop app' });
   const license = await License.findOne({ hospital: hospital._id });
   if (!license) return res.status(409).json({ success: false, message: 'Hospital has no mapped license' });
   const contact = {
@@ -368,6 +381,7 @@ exports.checkPlatformConnector = async (req, res) => {
   if (!validId(req.params.hospitalId)) return res.status(400).json({ success: false, message: 'Invalid hospital id' });
   const hospital = await Hospital.findById(req.params.hospitalId);
   if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+  if (hospital.deployment?.type === 'LOCAL_ELECTRON') return res.status(409).json({ success: false, message: 'LOCAL_ELECTRON installations are outbound-only; use enrollment/last-seen status instead of inbound health checks' });
   if (!hospital.platformConnector?.keyId || hospital.platformConnector?.status === 'NOT_CONFIGURED') {
     return res.status(409).json({ success: false, message: 'Platform connector credentials are not configured' });
   }
@@ -381,6 +395,12 @@ exports.checkPlatformConnector = async (req, res) => {
       // network/allow-list failure can recover without manual DB edits.
       allowedStatuses: ['PENDING', 'ACTIVE', 'UNREACHABLE']
     });
+    if (result?.appRole !== 'HOSPITAL' || result?.service !== 'mediqliq-hospital') {
+      throw Object.assign(new Error('Connector target is not a MediQliq Hospital backend'), { code: 'WRONG_CONNECTOR_TARGET' });
+    }
+    if (result?.hospital?.tenantCode && String(result.hospital.tenantCode).toUpperCase() !== String(hospital.tenantCode).toUpperCase()) {
+      throw Object.assign(new Error('Connector target tenant does not match this hospital'), { code: 'CONNECTOR_TENANT_MISMATCH' });
+    }
     hospital.platformConnector.status = 'ACTIVE';
     hospital.platformConnector.healthStatus = 'OK';
     hospital.platformConnector.lastHealthCheckAt = new Date();

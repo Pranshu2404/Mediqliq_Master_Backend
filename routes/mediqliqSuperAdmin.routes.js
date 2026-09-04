@@ -9,6 +9,7 @@ const hospitalController = require('../controllers/hospitalAdmin.controller');
 const licenseController = require('../controllers/licenseAdmin.controller');
 const planController = require('../controllers/planAdmin.controller');
 const supportController = require('../controllers/supportTicketAdmin.controller');
+const electronEnrollmentController = require('../controllers/electronEnrollment.controller');
 
 const requireSuperAdmin = [protect, isMediQliqSuperAdmin];
 
@@ -82,6 +83,7 @@ router.post('/hospitals', requireSuperAdmin, hospitalController.createHospital);
 router.get('/hospitals/:hospitalId', requireSuperAdmin, hospitalController.getHospital);
 router.patch('/hospitals/:hospitalId', requireSuperAdmin, hospitalController.updateHospital);
 router.post('/hospitals/:hospitalId/provision', requireSuperAdmin, hospitalController.provisionHospital);
+router.post('/hospitals/:hospitalId/electron-enrollment', requireSuperAdmin, electronEnrollmentController.issue);
 router.post('/hospitals/:hospitalId/platform-connector/rotate', requireSuperAdmin, hospitalController.rotatePlatformConnector);
 router.post('/hospitals/:hospitalId/platform-connector/check', requireSuperAdmin, hospitalController.checkPlatformConnector);
 router.delete('/hospitals/:hospitalId', requireSuperAdmin, hospitalController.deleteHospital);

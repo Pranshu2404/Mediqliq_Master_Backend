@@ -67,6 +67,7 @@ const hospitalSchema = new mongoose.Schema(
     },
 
     deployment: {
+      type: { type: String, enum: ['CLOUD', 'LOCAL_ELECTRON'], default: 'CLOUD', index: true },
       // Vercel/static frontend URL is optional but stored centrally alongside the backend URL.
       frontendUrl: { type: String, trim: true },
       backendUrl: { type: String, trim: true },
@@ -74,7 +75,7 @@ const hospitalSchema = new mongoose.Schema(
       environment: { type: String, enum: ['development', 'sandbox', 'production'], default: 'production' },
       status: {
         type: String,
-        enum: ['PLANNED', 'PROVISIONING', 'READY', 'PROVISIONING_FAILED', 'SUSPENDED'],
+        enum: ['PLANNED', 'AWAITING_ENROLLMENT', 'PROVISIONING', 'READY', 'PROVISIONING_FAILED', 'SUSPENDED'],
         default: 'PLANNED',
         index: true
       },
