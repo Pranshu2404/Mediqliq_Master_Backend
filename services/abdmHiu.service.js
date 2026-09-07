@@ -63,6 +63,7 @@ module.exports = {
   notifyHealthInformation: (id, body, r) => post('/data-flow/v3/health-information/notify', id, body, r),
   healthInformationStatus: (id, transactionId, r, authToken) => get(`/data-flow/v3/health-information/request/status/${encodeURIComponent(transactionId)}`, id, r, { authToken }),
 
+  sharePatientProfile: (id, body, r, authToken) => post('/patient-share/v3/share', id, body, r, { authToken }),
   requestRunningTokenStatus: (id, body, r, authToken) => post('/patient-share/v3/running-token/status', id, body, r, { authToken }),
   listHealthLockers: (id, query, r) => get(`/gateway/v3/health-lockers${queryString(query)}`, id, r),
 

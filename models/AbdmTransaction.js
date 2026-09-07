@@ -10,6 +10,7 @@ const abdmTransactionSchema = new mongoose.Schema(
       required: true,
       enum: [
         'PROFILE_SHARE',
+        'RUNNING_TOKEN_STATUS',
         'HIP_LINK_TOKEN',
         'HIP_LINK_SMS',
         'HIP_CARE_CONTEXT_LINK',

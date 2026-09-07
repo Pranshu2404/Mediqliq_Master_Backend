@@ -517,6 +517,10 @@ exports.hiuAction = async (req, res) => {
         flow: 'USER_DISCOVERY',
         execute: () => hiu.govtPrograms(hiuId, query, requestId, authToken)
       },
+      PHR_PROFILE_SHARE: {
+        flow: 'PROFILE_SHARE',
+        execute: () => hiu.sharePatientProfile(hiuId, body, requestId, authToken)
+      },
       REQUEST_RUNNING_TOKEN_STATUS: {
         flow: 'RUNNING_TOKEN_STATUS',
         execute: () => hiu.requestRunningTokenStatus(hiuId, body, requestId, authToken)
@@ -599,7 +603,7 @@ exports.hiuAction = async (req, res) => {
     }
 
     const patientAuthenticatedActions = new Set([
-      'REQUEST_RUNNING_TOKEN_STATUS',
+      'PHR_PROFILE_SHARE', 'REQUEST_RUNNING_TOKEN_STATUS',
       'LIST_CONSENT_REQUESTS', 'GET_CONSENT_REQUEST',
       'GET_CONSENT_ARTEFACTS_BY_REQUEST', 'GET_CONSENT_ARTEFACT',
       'LIST_CONSENT_ARTEFACTS', 'CREATE_CONSENT_AUTO_APPROVE',
